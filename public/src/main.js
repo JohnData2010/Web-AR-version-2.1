@@ -108,7 +108,10 @@ function init() {
   });
 
   const headerStatus = document.getElementById("headerStatus");
-  const showDevConditionBadge = debug || isLocalDevHost();
+  // Pilot test: always show Qualtrics `cid` in the header for verification.
+  const showDevConditionBadge = true;
+  // Production (hide condition id from participants — only debug or local preview):
+  // const showDevConditionBadge = debug || isLocalDevHost();
   if (headerStatus) {
     headerStatus.textContent = showDevConditionBadge ? condition.cid : `–`;
     headerStatus.title = showDevConditionBadge
