@@ -113,13 +113,13 @@ function init() {
   // Production (hide condition id from participants — only debug or local preview):
   // const showDevConditionBadge = debug || isLocalDevHost();
   if (headerStatus) {
-    headerStatus.textContent = showDevConditionBadge ? condition.cid : `–`;
-    headerStatus.title = showDevConditionBadge
-      ? `${condition.cid} · ${condition.module_label || condition.module}`
-      : "Status";
+    // `exit-icon` in HTML forces a 20×20 circle (meant for "–"); remove it when showing a real CID
+    // so the pill can grow (otherwise the condition id looks "missing").
     headerStatus.style.display = "inline-flex";
 
     if (showDevConditionBadge) {
+      headerStatus.classList.remove("exit-icon");
+
       const ok = validation.valid;
       headerStatus.setAttribute("aria-hidden", "false");
       headerStatus.setAttribute("role", "note");
@@ -136,6 +136,9 @@ function init() {
         ? `${condition.cid} (${condition.module_label || condition.module}) · ${cid_source || ""}`
         : `${condition.cid} (mismatch: ${validation.mismatches.join(", ")})`;
     } else {
+      headerStatus.classList.add("exit-icon");
+      headerStatus.textContent = `–`;
+      headerStatus.title = "Status";
       headerStatus.setAttribute("aria-hidden", "true");
       headerStatus.classList.remove("condition-badge-debug");
       headerStatus.style.color = "";
