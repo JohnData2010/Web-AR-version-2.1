@@ -1,164 +1,93 @@
-# Nhúng AR prototype vào Qualtrics
+# Embedding the AR prototype in Qualtrics
 
-AR prototype được thiết kế để chạy trong iframe (trang cha có thể là Qualtrics). Tài liệu này mô tả cách nhúng và nhận dữ liệu trong survey Qualtrics.
-
----
-
-## 1. Chuẩn bị: Deploy AR prototype lên URL public
-
-Qualtrics cần **HTTPS** và URL **public** để nhúng iframe. Camera chỉ hoạt động trên HTTPS.
-
-- **Cách nhanh:** Deploy lên **Netlify** hoặc **Vercel** (xem chi tiết trong [run_local.md](./run_local.md)).
-- **Domain hiện tại (Vercel):**  
-  [https://web-ar-version-1-0-deployed.vercel.app/](https://web-ar-version-1-0-deployed.vercel.app/)
-
-**Lưu ý:** Cấu hình `netlify.toml` / `vercel.json` đã bật header cho phép nhúng iframe (`X-Frame-Options`, `frame-ancestors`) để tương thích Qualtrics.
+The prototype is a **static client-side** page designed for **HTTPS** and **iframe** embedding. **Qualtrics should assign the experimental condition** and pass it to the app; the web app **does not** randomise conditions in production.
 
 ---
 
-## 2. URL của AR demo và tham số `cond`
+## 1. Deploy
 
-- **Trang chính (demo):**  
-  `https://web-ar-version-1-0-deployed.vercel.app/public/index.html`
+Host the repo on Netlify, Vercel, or similar (see [run_local.md](./run_local.md)). Production URLs must use **`cid`** (see [stimulus_spec.md](./stimulus_spec.md)).
 
-- **Tham số điều kiện thí nghiệm:**  
-  `?cond=1` … `?cond=8` (8 cell, khớp với spec trong `docs/stimulus_spec.md`).
+Example base (replace with your deployment):
 
-**Ví dụ:**
-
-- Điều kiện 1:  
-  `https://web-ar-version-1-0-deployed.vercel.app/public/index.html?cond=1`
-- Điều kiện 3:  
-  `https://web-ar-version-1-0-deployed.vercel.app/public/index.html?cond=3`
-
-Qualtrics có thể gán `cond` bằng **Embedded Data** (ví dụ `cond=1`) rồi dùng trong URL iframe.
+`https://your-deployment.vercel.app/public/index.html`
 
 ---
 
-## 3. Thêm iframe vào câu hỏi / block trong Qualtrics
+## 2. Condition parameter (`cid`)
 
-### Cách 1: Block “Text” hoặc “Descriptive Text” với HTML
+Use **`cid`**, not legacy numeric assignment alone:
 
-1. Trong survey, thêm **Block** mới hoặc mở một **Question**.
-2. Chọn loại **Text** / **Descriptive Text** (hoặc nơi cho phép nhập **Rich Content**).
-3. Chuyển sang chế độ **HTML** (nút “HTML” / “Source” trong editor).
-4. Dán đoạn sau (có thể đổi `cond=1` theo điều kiện thí nghiệm):
+`?cid=M1_C1` … `?cid=M2_C8`
+
+In Qualtrics Survey Flow:
+
+1. Create **Embedded Data**, e.g. `condition_id` = `M1_C3` (one of the sixteen codes).
+2. In the HTML question that contains the iframe, pipe it into the URL:
 
 ```html
-<div style="max-width: 480px; margin: 0 auto;">
-  <iframe
-    id="ar-demo-frame"
-    src="https://web-ar-version-1-0-deployed.vercel.app/public/index.html?cond=1"
-    title="AR Demo"
-    allow="camera; microphone"
-    style="width: 100%; height: 640px; border: none; border-radius: 16px;"
-  ></iframe>
-</div>
+<iframe
+  id="ar-demo-frame"
+  src="https://YOUR_HOST/public/index.html?cid=${e://Field/condition_id}"
+  title="AR Demo"
+  allow="camera; microphone"
+  style="width: 100%; height: 640px; border: none; border-radius: 16px;"
+></iframe>
 ```
 
-- **`allow="camera; microphone"`** là cần thiết để demo chạy (camera và microphone cho các filter).
-- Có thể chỉnh `height` (ví dụ `700px`) cho phù hợp layout.
-
-### Cách 2: Dùng Embedded Data để truyền `cond`
-
-1. Trong **Survey Flow**, set **Embedded Data** (ví dụ tên: `condition`) = `1` … `8` (random hoặc theo block).
-2. Trong phần HTML của câu hỏi chứa iframe, dùng cú pháp thay thế của Qualtrics:
-
-```html
-<div style="max-width: 480px; margin: 0 auto;">
-  <iframe
-    id="ar-demo-frame"
-    src="https://web-ar-version-1-0-deployed.vercel.app/public/index.html?cond=${e://Field/condition}"
-    title="AR Demo"
-    allow="camera; microphone"
-    style="width: 100%; height: 640px; border: none; border-radius: 16px;"
-  ></iframe>
-</div>
-```
-
-Như vậy mỗi người làm survey sẽ thấy đúng điều kiện được gán trong Flow.
+Use Survey Flow **randomisers** (e.g. even presentation across branches) to assign **`condition_id`** before the iframe block.
 
 ---
 
-## 4. Nhận dữ liệu từ AR prototype (postMessage)
+## 3. PostMessage to Qualtrics
 
-AR prototype gửi hai loại message lên trang cha (Qualtrics):
+The iframe sends:
 
-| Message               | Khi nào gửi   | Mục đích |
-|-----------------------|---------------|----------|
-| `AR_PROTO_AUDIT`      | Khi trang demo load xong | Ghi nhận condition_id, tham số URL, validation (để audit). |
-| `AR_PROTO_COMPLETE`   | Khi người dùng hoàn thành và thoát demo | Dữ liệu tổng kết: thời gian, tương tác, lag, v.v. |
+| Event | When |
+|-------|------|
+| **AR_PROTO_AUDIT** | Valid load; confirms which stimulus rendered (`cid`, validation flags). |
+| **AR_PROTO_COMPLETE** | Participant taps **Return to survey** on the exit screen. |
+| **AR_PROTO_ERROR** | Missing/invalid `cid` — participant should not proceed to analysis without fixing deployment/URL. |
 
-Cấu trúc ví dụ **AR_PROTO_COMPLETE** (đây là dữ liệu chính để lưu vào Qualtrics):
+Example **`AR_PROTO_COMPLETE`** payload includes **`cid`**, **`condition_id`**, **`returned_condition_id`**, module, bundle, dwell times, **`condition_valid`**, etc. Mirror fields into Embedded Data via JavaScript on the survey page.
 
-```json
-{
-  "type": "AR_PROTO_COMPLETE",
-  "payload": {
-    "condition_id": 1,
-    "tp": "...",
-    "id": "...",
-    "rt": "...",
-    "device_type": "mobile",
-    "camera_permission": "granted",
-    "time_on_prototype_ms": 120000,
-    "time_on_notice_ms": 15000,
-    "view_details_clicked": true,
-    "notice_review_opened_count": 1,
-    "interaction_count": 5,
-    "lag_flag": false
-  }
-}
-```
-
-Để **lưu vào Qualtrics**, bạn cần:
-
-1. Trong **Survey Flow**, tạo sẵn các **Embedded Data** tương ứng (ví dụ: `ar_condition_id`, `ar_time_on_prototype_ms`, `ar_complete`, …).
-2. Trong cùng block/câu hỏi chứa iframe, thêm **JavaScript** chạy trên trang survey, lắng nghe `message` từ iframe, khi nhận `AR_PROTO_COMPLETE` thì gọi API Qualtrics để set Embedded Data và (tuỳ thiết kế) chuyển sang câu hỏi tiếp theo.
-
-### Ví dụ JavaScript (chạy trong Qualtrics)
-
-Qualtrics cho phép thêm JS trong **Question** (mục “JavaScript” / “Add JavaScript”) hoặc trong **Look & Feel** → **Header/Footer**. Script phải chạy trên **cùng trang** với iframe.
-
-Ví dụ đơn giản: khi nhận `AR_PROTO_COMPLETE`, set một vài Embedded Data và đánh dấu hoàn thành:
+Example listener sketch:
 
 ```javascript
-Qualtrics.SurveyEngine.addOnload(function() {
-  var that = this;
+Qualtrics.SurveyEngine.addOnload(function () {
   function handleMessage(event) {
-    if (!event.data || event.data.type !== "AR_PROTO_COMPLETE") return;
-    var p = event.data.payload || {};
-    Qualtrics.SurveyEngine.setEmbeddedData("ar_condition_id", p.condition_id);
-    Qualtrics.SurveyEngine.setEmbeddedData("ar_time_on_prototype_ms", p.time_on_prototype_ms);
-    Qualtrics.SurveyEngine.setEmbeddedData("ar_time_on_notice_ms", p.time_on_notice_ms);
-    Qualtrics.SurveyEngine.setEmbeddedData("ar_device_type", p.device_type);
-    Qualtrics.SurveyEngine.setEmbeddedData("ar_complete", "1");
-    window.removeEventListener("message", handleMessage);
-    that.clickNextButton(); // chuyển câu hỏi tiếp theo (tuỳ chọn)
+    var d = event.data;
+    if (!d || !d.type) return;
+    if (d.type === "AR_PROTO_COMPLETE" && d.payload) {
+      var p = d.payload;
+      Qualtrics.SurveyEngine.setEmbeddedData("ar_cid", p.cid || "");
+      Qualtrics.SurveyEngine.setEmbeddedData(
+        "ar_returned_condition_id",
+        String(p.returned_condition_id || "")
+      );
+      Qualtrics.SurveyEngine.setEmbeddedData("ar_complete", "1");
+      window.removeEventListener("message", handleMessage);
+    }
+    if (d.type === "AR_PROTO_ERROR") {
+      Qualtrics.SurveyEngine.setEmbeddedData("ar_error_code", d.payload.code || "");
+    }
   }
   window.addEventListener("message", handleMessage);
 });
 ```
 
-- Tên Embedded Data (`ar_condition_id`, …) cần khớp với tên đã khai báo trong Survey Flow.
-- `clickNextButton()` chỉ dùng nếu bạn muốn tự động chuyển block sau khi hoàn thành; có thể bỏ và thay bằng nút “Tiếp tục” thủ công.
+QC: compare Qualtrics **`condition_id`** (assigned in Flow) with **`ar_cid`** / **`returned_condition_id`** from the completion payload.
+
+**Option B privacy:** For **`M1_*`** assignments, completion payloads use **`retention_condition: "not_displayed"`** because retention text was not shown. For **`M2_*`**, **`sharing_condition: "not_displayed"`**. Rely on **`displayed_policy_sections`**, **`sharing_displayed`**, and **`retention_displayed`** when exporting analysis-ready columns.
 
 ---
 
-## 5. Kiểm tra nhanh (không cần Qualtrics)
+## 4. Local testing
 
-Dùng **test harness** đi kèm project:
-
-- URL: [https://web-ar-version-1-0-deployed.vercel.app/public/test-harness.html](https://web-ar-version-1-0-deployed.vercel.app/public/test-harness.html)
-- Trang này nhúng iframe với `?cond=1` và log mọi `AR_PROTO_COMPLETE` ra màn hình. Bạn có thể kiểm tra payload trước khi tích hợp vào Qualtrics.
+Use **`public/test-harness.html`** with the **`cid`** dropdown and the **expected-spec panel** (debug mode). Do **not** rely on the web app to choose conditions for real data collection.
 
 ---
 
-## 6. Lưu ý khi dùng trong survey thật
+## 5. Headers
 
-- **Camera:** Người tham gia cần bật camera và chấp nhận quyền truy cập trên trình duyệt (HTTPS).
-- **Trình duyệt:** Nên dùng Chrome/Safari (Edge/Firefox thường vẫn được; cần test).
-- **Mobile:** Demo hỗ trợ mobile; trên Qualtrics nên test cả desktop và mobile.
-- **Điều kiện (cond):** Luôn truyền `cond=1`…`8` đúng với thiết kế thí nghiệm; prototype gửi lại `condition_id` trong `AR_PROTO_AUDIT` và `AR_PROTO_COMPLETE` để bạn đối chiếu.
-
-Nếu bạn đã deploy lên Netlify/Vercel và cấu hình Embedded Data + JS như trên, AR prototype đã có thể nhúng và truyền dữ liệu về Qualtrics đúng cách.
+`vercel.json` / `netlify.toml` allow iframe embedding (`frame-ancestors`) for Qualtrics.

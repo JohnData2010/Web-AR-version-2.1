@@ -5,14 +5,18 @@ This prototype is a static, client-side SPA intended to run inside a Qualtrics i
 ### Folder Structure
 
 - `public/index.html` — main AR demo entry page (to be embedded in Qualtrics).
-- `public/test-harness.html` — simple parent page to test `postMessage` behavior.
-- `src/main.js` — app bootstrap, URL parsing, and initialization.
-- `src/ui.js` — screen rendering and state machine (Intro → Notice → Details → Demo → Exit).
-- `src/conditions.js` — all experimental condition text (8 cells), matching `docs/stimulus_spec.md`.
-- `src/logger.js` — timers, interaction logging, and lag flag computation.
+- `public/test-harness.html` — parent page to test `postMessage` (`cid` dropdown, `debug=1`).
+- `src/main.js` — bootstrap, **`cid`** validation, **`AR_PROTO_AUDIT`** / **`AR_PROTO_ERROR`**, init UI.
+- `src/ui.js` — screen flow: **Intro → Privacy notice → App permissions → Demo → Exit**.
+- `src/conditions.js` — sixteen **`cid`** conditions (`M1_C1`…`M2_C8`); see **`docs/stimulus_spec.md`**.
+- `src/logger.js` — dwell timers, interactions, lag flag, **`AR_PROTO_COMPLETE`** payload.
 - `src/postmessage.js` — origin-aware `postMessage` sender.
 
 ### Running Locally
+
+On **`localhost`**, **`127.0.0.1`**, or opening **`file:`** HTML, you may omit **`cid`** in the URL: the app will pick a random valid condition for preview. On a **deployed** host (e.g. `*.vercel.app`), **`cid` is still required** unless you add **`?debug=1`**.
+
+Privacy notice (**Option B**): **M1_*** shows only the third-party paragraph; **M2_*** shows only retention — see **`docs/stimulus_spec.md`**.
 
 You can use any static HTTP server. Examples below use Node.js, but Python or other tools work as well.
 
@@ -55,7 +59,7 @@ To make the demo accessible via a public URL (for Qualtrics embedding or testing
    - Click "Deploy site"
 
 4. **Result:** You'll get a URL like `https://your-site-name.netlify.app`
-   - Main demo: `https://your-site-name.netlify.app/public/index.html?cond=1`
+   - Main demo: `https://your-site-name.netlify.app/public/index.html?cid=M1_C1` (use the assigned `cid`)
    - Test harness: `https://your-site-name.netlify.app/public/test-harness.html`
 
 5. **For Qualtrics:** Use the main demo URL in your iframe embed code
@@ -97,7 +101,7 @@ For quick testing without deploying:
    (Replace `3000` with your local server port)
 
 4. **Result:** You'll get a temporary HTTPS URL like `https://abc123.ngrok.io`
-   - Main demo: `https://abc123.ngrok.io/public/index.html?cond=1`
+   - Main demo: `https://abc123.ngrok.io/public/index.html?cid=M1_C1`
    - **Note:** Free ngrok URLs expire after 2 hours. Paid plans have persistent URLs.
 
 #### Option D: GitHub Pages

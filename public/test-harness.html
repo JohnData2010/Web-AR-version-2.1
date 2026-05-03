@@ -26,8 +26,8 @@
         border-radius: 8px;
         background: #0b1120;
         border: 1px solid #1f2937;
-        font-size: 12px;
-        max-height: 220px;
+        font-size: 11px;
+        max-height: 320px;
         overflow: auto;
         white-space: pre-wrap;
       }
@@ -44,6 +44,7 @@
         display: block;
         margin-bottom: 6px;
       }
+      select,
       input {
         font-size: 13px;
         padding: 4px 6px;
@@ -51,7 +52,10 @@
         border: 1px solid #4b5563;
         background: #020617;
         color: #e5e7eb;
-        width: 220px;
+        max-width: 100%;
+      }
+      select {
+        min-width: 200px;
       }
       button {
         margin-left: 6px;
@@ -66,29 +70,68 @@
       button:active {
         transform: translateY(1px);
       }
+      .meta {
+        font-size: 12px;
+        color: #9ca3af;
+        margin-bottom: 8px;
+      }
+      .expect-panel {
+        margin-top: 12px;
+        padding: 10px 12px;
+        border-radius: 8px;
+        background: #0f172a;
+        border: 1px solid #334155;
+        font-size: 11px;
+        line-height: 1.45;
+        max-width: 560px;
+        white-space: pre-wrap;
+        color: #cbd5e1;
+      }
+      .expect-panel strong {
+        color: #e2e8f0;
+      }
     </style>
   </head>
   <body>
     <h1>AR Demo postMessage Test Harness</h1>
-    <p style="font-size: 13px; color: #9ca3af;">
-      This page embeds the AR demo in an iframe and logs any
-      <code>AR_PROTO_COMPLETE</code> messages it receives.
+    <p class="meta">
+      Embeds the demo with <code>?debug=1&amp;cid=…</code>. Logs
+      <code>AR_PROTO_AUDIT</code>, <code>AR_PROTO_COMPLETE</code>, and
+      <code>AR_PROTO_ERROR</code>.
     </p>
     <div style="margin-bottom: 10px;">
       <label>
-        Condition:
-        <input id="condInput" type="number" min="1" max="8" value="1" />
+        Condition (<code>cid</code>):
+        <select id="cidSelect" aria-label="Condition cid"></select>
         <button id="reloadBtn" type="button">Reload iframe</button>
       </label>
     </div>
     <iframe
       id="demoFrame"
-      src="./index.html?cond=1"
+      src="./index.html?debug=1&amp;cid=M1_C1"
       title="AR Demo"
       allow="camera; microphone"
     ></iframe>
+    <div class="expect-panel" id="expectPanel" aria-live="polite"></div>
     <div class="log" id="log"></div>
     <script>
+      const CIDS = []
+        .concat(
+          ["M1_C1", "M1_C2", "M1_C3", "M1_C4", "M1_C5", "M1_C6", "M1_C7", "M1_C8"]
+        )
+        .concat(
+          ["M2_C1", "M2_C2", "M2_C3", "M2_C4", "M2_C5", "M2_C6", "M2_C7", "M2_C8"]
+        );
+
+      const cidSelect = document.getElementById("cidSelect");
+      CIDS.forEach((cid) => {
+        const opt = document.createElement("option");
+        opt.value = cid;
+        opt.textContent = cid;
+        cidSelect.appendChild(opt);
+      });
+      cidSelect.value = "M1_C1";
+
       const logEl = document.getElementById("log");
       function appendLog(msg) {
         const now = new Date().toISOString();
@@ -97,19 +140,81 @@
       }
 
       window.addEventListener("message", (event) => {
-        if (!event.data || event.data.type !== "AR_PROTO_COMPLETE") return;
-        appendLog("Received AR_PROTO_COMPLETE: " + JSON.stringify(event.data));
+        const d = event.data;
+        if (!d || typeof d.type !== "string") return;
+        if (
+          d.type === "AR_PROTO_COMPLETE" ||
+          d.type === "AR_PROTO_AUDIT" ||
+          d.type === "AR_PROTO_ERROR"
+        ) {
+          appendLog(d.type + ": " + JSON.stringify(d));
+        }
       });
 
       const reloadBtn = document.getElementById("reloadBtn");
-      const condInput = document.getElementById("condInput");
       const iframe = document.getElementById("demoFrame");
+      const expectPanel = document.getElementById("expectPanel");
 
-      reloadBtn.addEventListener("click", () => {
-        const cond = Number(condInput.value) || 1;
-        iframe.src = "./index.html?cond=" + cond;
-        appendLog("Reloaded iframe with cond=" + cond);
-      });
+      /** Mirrors Option B / stimulus_spec (no bundler — keep in sync with conditions.js). */
+      function expectedSpec(cid) {
+        const m = cid.match(/^M(\d)_C(\d+)$/);
+        if (!m) return "Invalid cid";
+        const mod = m[1];
+        const cNum = parseInt(m[2], 10);
+        const dIndex = Math.ceil(cNum / 2);
+        const access_bundle = "D" + dIndex;
+        const bundleHint = {
+          1: "D1 — biometric only, narrow (only this time), no album",
+          2: "D2 — biometric only, broad (while using), no album",
+          3: "D3 — biometric+personal, narrow, album selected",
+          4: "D4 — biometric+personal, broad, album allow all",
+        }[dIndex];
+        if (mod === "1") {
+          const sharing = cNum % 2 === 1 ? "internal" : "external";
+          return [
+            "**Expected (Module 1 — sharing)**",
+            "module: sharing",
+            "displayed_policy_sections: [sharing]",
+            "focal_policy_cue: sharing",
+            "sharing_condition: " + sharing,
+            "sharing_displayed: true",
+            "retention_condition: not_displayed",
+            "retention_displayed: false",
+            "access_bundle: " + access_bundle,
+            "policy UI: third-party section ONLY (no retention paragraph)",
+            "permissions: " + bundleHint,
+          ].join("\n");
+        }
+        const retention = cNum % 2 === 1 ? "immediate" : "stored";
+        return [
+          "**Expected (Module 2 — retention)**",
+          "module: retention",
+          "displayed_policy_sections: [retention]",
+          "focal_policy_cue: retention",
+          "sharing_condition: not_displayed",
+          "sharing_displayed: false",
+          "retention_condition: " + retention,
+          "retention_displayed: true",
+          "access_bundle: " + access_bundle,
+          "policy UI: retention section ONLY (no third-party paragraph)",
+          "permissions: " + bundleHint,
+        ].join("\n");
+      }
+
+      function updateExpect() {
+        expectPanel.textContent = expectedSpec(cidSelect.value || "M1_C1");
+      }
+
+      function reload() {
+        const cid = cidSelect.value || "M1_C1";
+        iframe.src = "./index.html?debug=1&cid=" + encodeURIComponent(cid);
+        appendLog("Reloaded iframe with cid=" + cid);
+        updateExpect();
+      }
+
+      reloadBtn.addEventListener("click", reload);
+      cidSelect.addEventListener("change", reload);
+      updateExpect();
     </script>
   </body>
 </html>
