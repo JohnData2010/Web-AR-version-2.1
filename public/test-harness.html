@@ -95,15 +95,73 @@
       .expect-panel strong {
         color: #e2e8f0;
       }
+      .expect-panel ul {
+        margin: 6px 0 0 1.1rem;
+        padding: 0;
+      }
+      .expect-panel code {
+        color: #a5b4fc;
+        font-size: 11px;
+      }
+      #iframeUrlPreview {
+        margin-top: 8px;
+        font-size: 11px;
+        color: #94a3b8;
+        word-break: break-all;
+      }
+      #iframeUrlPreview code {
+        color: #a5f3fc;
+      }
+      .audit-panel {
+        margin-top: 12px;
+        padding: 10px 12px;
+        border-radius: 8px;
+        background: #0f172a;
+        border: 1px solid #334155;
+        font-size: 11px;
+        line-height: 1.45;
+        max-width: 560px;
+        color: #cbd5e1;
+      }
+      .audit-panel .ok {
+        color: #4ade80;
+      }
+      .audit-panel .bad {
+        color: #fb923c;
+      }
+      details.checklist-reminder {
+        margin-top: 10px;
+        max-width: 560px;
+        font-size: 11px;
+        color: #9ca3af;
+      }
+      details.checklist-reminder summary {
+        cursor: pointer;
+        color: #cbd5e1;
+      }
     </style>
   </head>
   <body>
     <h1>AR Demo postMessage Test Harness</h1>
     <p class="meta">
-      Embeds the demo with <code>?debug=1&amp;cid=…</code>. Logs
-      <code>AR_PROTO_AUDIT</code>, <code>AR_PROTO_COMPLETE</code>, and
-      <code>AR_PROTO_ERROR</code>.
+      <strong>Quick pre-Qualtrics check:</strong> pick each <code>cid</code> below, reload,
+      skim policy + permission UI vs the checklist, confirm
+      <code>AR_PROTO_AUDIT</code> / <code>AR_PROTO_COMPLETE</code> in the log. Logs
+      <code>AR_PROTO_ERROR</code> if <code>cid</code> is missing or invalid.
     </p>
+    <details class="checklist-reminder">
+      <summary>Pilot checklist (Qualtrics) — reminders</summary>
+      <ul>
+        <li>After demographics: Embedded Data <code>condition_id</code> set?</li>
+        <li>Iframe URL has <code>?cid=M...</code> (production) or harness uses <code>debug=1&amp;cid=</code>.</li>
+        <li>No <code>missing_cid</code> / AUDIT reflects correct module &amp; bundle.</li>
+        <li>Header badge matches <code>cid</code> during pilot builds.</li>
+        <li>M1: privacy = sharing only; M2: retention only.</li>
+        <li>D1/D2: no album; D3/D4: album wording matches narrow/broad cells.</li>
+        <li>After prototype: ED <code>ar_condition_id_returned</code> matches assigned <code>condition_id</code>; <code>ar_complete</code> after Return.</li>
+        <li>Manipulation MC items: Display Logic follows <code>assigned_module</code> (sharing vs retention).</li>
+      </ul>
+    </details>
     <div style="margin-bottom: 10px;">
       <label>
         Condition (<code>cid</code>):
@@ -117,7 +175,11 @@
       title="AR Demo"
       allow="camera; microphone"
     ></iframe>
+    <p id="iframeUrlPreview"></p>
     <div class="expect-panel" id="expectPanel" aria-live="polite"></div>
+    <div class="audit-panel" id="auditPanel" aria-live="polite">
+      Waiting for <code>AR_PROTO_AUDIT</code>…
+    </div>
     <div class="log" id="log"></div>
     <script>
       const CIDS = []
@@ -144,6 +206,112 @@
         logEl.scrollTop = logEl.scrollHeight;
       }
 
+      /** Match public/src/conditions.js Option B sixteen cells (keep in sync). */
+      function expectedFromCid(cid) {
+        const m = cid && cid.match(/^M(\d)_C(\d+)$/);
+        if (!m) return null;
+        const mod = m[1];
+        const cNum = parseInt(m[2], 10);
+        const dIndex = Math.ceil(cNum / 2);
+        const access_bundle = "D" + dIndex;
+        const scope = dIndex % 2 === 1 ? "narrow" : "broad"; /* D1,D3 narrow; D2,D4 broad */
+        let photo_access;
+        if (dIndex <= 2) photo_access = "none";
+        else if (dIndex === 3) photo_access = "selected_photos";
+        else photo_access = "allow_all";
+
+        if (mod === "1") {
+          const sharing = cNum % 2 === 1 ? "internal" : "external";
+          return {
+            module: "sharing",
+            policy_section_shown: "sharing",
+            sharing_condition: sharing,
+            retention_condition: "not_displayed",
+            sharing_displayed: 1,
+            retention_displayed: 0,
+            access_bundle,
+            scope,
+            photo_access,
+            headline: "Module 1 — third-party sharing only (no retention block)",
+          };
+        }
+        const retention = cNum % 2 === 1 ? "immediate" : "stored";
+        return {
+          module: "retention",
+          policy_section_shown: "retention",
+          sharing_condition: "not_displayed",
+          retention_condition: retention,
+          sharing_displayed: 0,
+          retention_displayed: 1,
+          access_bundle,
+          scope,
+          photo_access,
+          headline: "Module 2 — retention only (no third-party sharing block)",
+        };
+      }
+
+      function num(v) {
+        return Number(v === true ? 1 : v === false ? 0 : v);
+      }
+
+      function renderAuditChecks(p) {
+        const panel = document.getElementById("auditPanel");
+        const sel = cidSelect.value || "M1_C1";
+        if (!panel) return;
+
+        const exp = expectedFromCid(p.cid);
+        if (!exp) {
+          panel.textContent =
+            "AUDIT has unknown cid — cannot compare: " + String(p && p.cid);
+          return;
+        }
+
+        function row(ok, label) {
+          var icon = ok ? '<span class="ok">PASS</span>' : '<span class="bad">CHECK</span>';
+          return "<li>" + icon + " " + label + "</li>";
+        }
+
+        var pairs = [];
+        pairs.push(["cid equals harness selection", String(p.cid) === sel]);
+        pairs.push(["module", p.module === exp.module]);
+        pairs.push(["access_bundle", p.access_bundle === exp.access_bundle]);
+        pairs.push(["scope (narrow vs broad)", p.scope === exp.scope]);
+        pairs.push(["photo_access", p.photo_access === exp.photo_access]);
+        pairs.push(
+          ["sharing_displayed", num(p.sharing_displayed) === exp.sharing_displayed]
+        );
+        pairs.push(
+          ["retention_displayed", num(p.retention_displayed) === exp.retention_displayed]
+        );
+        pairs.push(["sharing_condition string", (p.sharing_condition || "") === exp.sharing_condition]);
+        pairs.push(["retention_condition string", (p.retention_condition || "") === exp.retention_condition]);
+
+        var html =
+          '<strong style="color:#e2e8f0;">Last AR_PROTO_AUDIT vs harness rules</strong> ' +
+          '<span style="color:#64748b;">(selected ' +
+          escapeHtml(sel) +
+          "; payload cid " +
+          escapeHtml(String(p.cid || "")) +
+          ")</span><ul>";
+        pairs.forEach(function (pr) {
+          html += row(pr[1], pr[0]);
+        });
+        html += "</ul>";
+        html +=
+          '<p style="margin:8px 0 0;color:#94a3b8;">Manual: open notice + permissions screens and confirm wording matches "' +
+          exp.headline +
+          '" and bundle D hint below.</p>';
+        panel.innerHTML = html;
+      }
+
+      function escapeHtml(s) {
+        return String(s)
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/\"/g, "&quot;");
+      }
+
       window.addEventListener("message", (event) => {
         const d = event.data;
         if (!d || typeof d.type !== "string") return;
@@ -154,60 +322,79 @@
         ) {
           appendLog(d.type + ": " + JSON.stringify(d));
         }
+        if (d.type === "AR_PROTO_AUDIT") {
+          var p = d.payload || d;
+          renderAuditChecks(p);
+        }
+        if (d.type === "AR_PROTO_ERROR") {
+          var ap = document.getElementById("auditPanel");
+          if (ap) {
+            var pay = d.payload || d;
+            ap.innerHTML =
+              '<strong class="bad">AR_PROTO_ERROR</strong><br><code>' +
+              escapeHtml(String(pay.code || "")) +
+              "</code> " +
+              escapeHtml(String(pay.message || ""));
+          }
+        }
       });
 
       const reloadBtn = document.getElementById("reloadBtn");
       const iframe = document.getElementById("demoFrame");
       const expectPanel = document.getElementById("expectPanel");
 
-      /** Mirrors Option B / stimulus_spec (no bundler — keep in sync with conditions.js). */
-      function expectedSpec(cid) {
-        const m = cid.match(/^M(\d)_C(\d+)$/);
-        if (!m) return "Invalid cid";
-        const mod = m[1];
-        const cNum = parseInt(m[2], 10);
-        const dIndex = Math.ceil(cNum / 2);
-        const access_bundle = "D" + dIndex;
-        const bundleHint = {
-          1: "D1 — biometric only, narrow (only this time), no album",
-          2: "D2 — biometric only, broad (while using), no album",
-          3: "D3 — biometric+personal, narrow, album selected",
-          4: "D4 — biometric+personal, broad, album allow all",
-        }[dIndex];
-        if (mod === "1") {
-          const sharing = cNum % 2 === 1 ? "internal" : "external";
-          return [
-            "**Expected (Module 1 — sharing)**",
-            "module: sharing",
-            "displayed_policy_sections: [sharing]",
-            "focal_policy_cue: sharing",
-            "sharing_condition: " + sharing,
-            "sharing_displayed: true",
-            "retention_condition: not_displayed",
-            "retention_displayed: false",
-            "access_bundle: " + access_bundle,
-            "policy UI: third-party section ONLY (no retention paragraph)",
-            "permissions: " + bundleHint,
-          ].join("\n");
-        }
-        const retention = cNum % 2 === 1 ? "immediate" : "stored";
-        return [
-          "**Expected (Module 2 — retention)**",
-          "module: retention",
-          "displayed_policy_sections: [retention]",
-          "focal_policy_cue: retention",
-          "sharing_condition: not_displayed",
-          "sharing_displayed: false",
-          "retention_condition: " + retention,
-          "retention_displayed: true",
-          "access_bundle: " + access_bundle,
-          "policy UI: retention section ONLY (no third-party paragraph)",
-          "permissions: " + bundleHint,
-        ].join("\n");
+      const bundleLines = {
+        1: "D1 — biometric only, narrow (camera/mic: only this time), no album",
+        2: "D2 — biometric only, broad (while using), no album",
+        3: "D3 — biometric+personal, narrow, album: selected photos",
+        4: "D4 — biometric+personal, broad, album: allow all",
+      };
+
+      function expectedSpecHtml(cid) {
+        const exp = expectedFromCid(cid);
+        if (!exp) return "<p>Invalid <code>cid</code>.</p>";
+
+        var dm = cid && cid.match(/^M\d_C(\d+)$/);
+        var dIndex = dm ? Math.ceil(parseInt(dm[1], 10) / 2) : 0;
+
+        var lines =
+          "<p><strong>" +
+          escapeHtml(exp.headline) +
+          '</strong></p><ul>' +
+          "<li><strong>IFrame URL:</strong> <code>./index.html?debug=1&amp;cid=" +
+          escapeHtml(cid) +
+          "</code></li>" +
+          "<li><strong>ACCESS_BUNDLE:</strong> " +
+          escapeHtml(exp.access_bundle) +
+          ' — scope <strong>' +
+          escapeHtml(exp.scope) +
+          '</strong>; photo_access <strong>' +
+          escapeHtml(exp.photo_access) +
+          '</strong>; module <strong>' +
+          escapeHtml(exp.module) +
+          "</strong></li>" +
+          "<li>" +
+          escapeHtml(bundleLines[dIndex] || "") +
+          "</li>" +
+          "<li>M1 expects third-party clause only · M2 expects retention clause only</li>" +
+          "<li>D1/D2 → no album permission path · D3/D4 → album permission path</li>" +
+          "<li>D1/D3 narrow · D2/D4 broad</li>" +
+          "</ul>";
+        return lines;
       }
 
       function updateExpect() {
-        expectPanel.textContent = expectedSpec(cidSelect.value || "M1_C1");
+        const cid = cidSelect.value || "M1_C1";
+        expectPanel.innerHTML =
+          '<strong style="color:#e2e8f0;">Pilot rules for selection</strong>' +
+          expectedSpecHtml(cid);
+        const urlPreview = document.getElementById("iframeUrlPreview");
+        if (urlPreview) {
+          const rel =
+            "./index.html?debug=1&cid=" + encodeURIComponent(cid);
+          urlPreview.innerHTML =
+            "Active iframe URL &nbsp;<code>" + escapeHtml(rel) + "</code>";
+        }
       }
 
       function reload() {
@@ -215,6 +402,8 @@
         iframe.src = "./index.html?debug=1&cid=" + encodeURIComponent(cid);
         appendLog("Reloaded iframe with cid=" + cid);
         updateExpect();
+        document.getElementById("auditPanel").innerHTML =
+          "Waiting for <code>AR_PROTO_AUDIT</code>…";
       }
 
       reloadBtn.addEventListener("click", reload);

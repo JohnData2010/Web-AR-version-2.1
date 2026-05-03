@@ -5,7 +5,7 @@ This prototype is a static, client-side SPA intended to run inside a Qualtrics i
 ### Folder Structure
 
 - `public/index.html` — main AR demo entry page (to be embedded in Qualtrics).
-- `public/test-harness.html` — parent page to test `postMessage` (`cid` dropdown, `debug=1`).
+- `public/test-harness.html` — parent page: loads `./index.html?debug=1&cid=…` for each of 16 cells, logs **`AR_PROTO_*`**, shows **pilot checklist text**, **active iframe URL**, and **PASS/CHECK rows** comparing the last **`AR_PROTO_AUDIT`** payload to Option B rules (run this before Qualtrics pilot).
 - `public/src/main.js` — bootstrap, **`cid`** validation, **`AR_PROTO_AUDIT`** / **`AR_PROTO_ERROR`**, init UI.
 - `public/src/ui.js` — screen flow: **Intro → Privacy notice → App permissions → Demo → Exit**.
 - `public/src/conditions.js` — sixteen **`cid`** conditions (`M1_C1`…`M2_C8`); see **`docs/stimulus_spec.md`**.
