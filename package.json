@@ -1,5 +1,5 @@
 {
-  "dependencies": {
-    "@mediapipe/tasks-vision": "^0.10.0"
-  }
+  "name": "ar-demo-code",
+  "private": true,
+  "description": "Static AR face-filter prototype for Qualtrics (modules load via CDN; no npm build)."
 }

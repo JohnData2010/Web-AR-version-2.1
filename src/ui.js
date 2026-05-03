@@ -388,6 +388,7 @@ export class AppUI {
     primary.classList.add("btn-disabled");
     primary.addEventListener("click", () => {
       this.logger.addInteraction();
+      this.logger.markPermissionContinueClicked();
       this.toScreen(SCREENS.DEMO);
     });
 
@@ -408,12 +409,12 @@ export class AppUI {
     const subtitle = document.createElement("div");
     subtitle.className = "screen-subtitle";
     subtitle.textContent =
-      "Step 2 of 3: explore the filter on a short embedded demo video. Tap the buttons below to try different styles.";
+      "Step 2 of 3: use your camera for the live AR face-filter preview. Tap the buttons below to try different styles.";
 
     const demoShell = document.createElement("div");
     demoShell.className = "demo-shell";
 
-    // Demo video frame
+    // Live camera preview + AR overlay frame
     const frame = document.createElement("div");
     frame.className = "demo-video-frame";
     frame.id = "demoFrame";
@@ -595,8 +596,6 @@ export class AppUI {
     const textarea = document.createElement("textarea");
     textarea.id = "feedbackTextarea";
     textarea.placeholder = "Your feedback…";
-    textarea.style.cssText =
-      "width:100%;min-height:140px;resize:vertical;border-radius:12px;border:1px solid rgba(148,163,184,0.6);padding:12px 12px;font-size:13px;line-height:1.4;outline:none;";
 
     const hint = document.createElement("div");
     hint.className = "meta-text";
@@ -785,6 +784,7 @@ export class AppUI {
     this.demoStartTime = performance.now();
     this.demoInteractionCountAtStart = this.logger.interactionCount;
     this.logger.markDemoVisible();
+    this.logger.markDemoEntered();
     this.logger.startLagMonitor();
 
     // Always treat demo entry as a fresh run so permissions are re-asked consistently
@@ -803,10 +803,9 @@ export class AppUI {
     // Bắt đầu timer kiểm tra gating
     this.startDemoGatingTimer();
 
-    // Request required permissions right when the demo appears (UI simulation only):
-    // - Camera
-    // - Microphone
-    // - Photo albums (photos/videos) if condition includes it
+    // Request flows when the demo appears:
+    // - Camera: after the in-app prompt, call getUserMedia (system camera API).
+    // - Microphone / photo albums: same in-app prompts and UI as before; no device mic or photo-library APIs.
     const needPhotos = this.condition.photo === "library";
     const needMic = true;
 
@@ -846,7 +845,24 @@ export class AppUI {
       this.showPermissionPrompt(
         "camera",
         async () => {
-          await this.enableEmbeddedVideoView();
+          try {
+            const stream = await this.requestCameraStream();
+            await this.enableCameraView(stream);
+            this.logger.setCameraPermission("granted");
+          } catch (err) {
+            console.error("Camera start failed:", err);
+            const name = err && err.name;
+            this.logger.setCameraPermission(
+              name === "NotAllowedError" || name === "PermissionDeniedError"
+                ? "denied"
+                : "error"
+            );
+            this.showCameraUnavailable(
+              name === "NotAllowedError" || name === "PermissionDeniedError"
+                ? "Camera access was blocked. You can allow it in your browser or system settings and try again."
+                : "Could not access the camera. Please check your device and try again."
+            );
+          }
           promptMic();
         },
         () => promptMic()
@@ -880,6 +896,7 @@ export class AppUI {
   finishAndSendData() {
     const summary = this.logger.getSummary(this.condition, {
       condition_valid: this.condition_valid,
+      demo_completed: this.demoCompleted,
     });
     sendCompletionMessage(summary);
   }
@@ -899,21 +916,10 @@ export class AppUI {
     // Tạo mới overlay
     overlay = document.createElement("div");
     overlay.id = "demoNoticeOverlay";
-    overlay.style.cssText = `
-      position: fixed;
-      inset: 0;
-      background: rgba(15,23,42,0.85);
-      backdrop-filter: blur(8px);
-      z-index: 999;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      padding: 20px;
-    `;
+    overlay.className = "ar-modal-overlay";
 
     const card = document.createElement("div");
     card.className = "card card-contrast";
-    card.style.cssText = "max-width: 420px; width: 100%;";
 
     const heading = document.createElement("div");
     heading.className = "notice-heading";
@@ -948,28 +954,10 @@ export class AppUI {
     fetch('http://127.0.0.1:7243/ingest/53d0209c-35d3-4927-ba1e-aa88e05e7ed6',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'a93ced'},body:JSON.stringify({sessionId:'a93ced',runId:'qualtrics-permission-debug',hypothesisId:'P1',location:'src/ui.js:showPermissionPrompt:start',message:'permission prompt created',data:{kind,decisionDelayMs:this.permissionDecisionDelayMs,scope:this.condition?.scope,photo:this.condition?.photo},timestamp:Date.now()})}).catch(()=>{});
     // #endregion
     const overlay = document.createElement("div");
-    overlay.style.cssText = `
-      position: fixed;
-      inset: 0;
-      background: rgba(15,23,42,0.55);
-      backdrop-filter: blur(6px);
-      z-index: 999;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      padding: 20px;
-    `;
+    overlay.className = "ar-permission-overlay";
 
     const card = document.createElement("div");
-    card.style.cssText = `
-      max-width: 320px;
-      width: 100%;
-      border-radius: 16px;
-      background: #f9fafb;
-      box-shadow: 0 18px 45px rgba(15,23,42,0.45);
-      padding: 16px 16px 10px;
-      font-family: -apple-system, system-ui, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif;
-    `;
+    card.className = "ar-permission-card";
 
     const title = document.createElement("div");
     title.style.cssText =
@@ -1294,6 +1282,7 @@ export class AppUI {
       try {
         video.pause();
       } catch (e) {}
+      video.removeAttribute("src");
       video.srcObject = null;
       video.currentTime = 0;
       video.style.display = "none";
@@ -1319,7 +1308,7 @@ export class AppUI {
     const statusChip = document.getElementById("demoStatusChip");
     if (statusChip) {
       statusChip.innerHTML =
-        '<span class="chip-dot chip-dot-off"></span><span>Demo video paused</span>';
+        '<span class="chip-dot chip-dot-off"></span><span>Camera off</span>';
     }
 
     const camBtn = document.getElementById("demoCameraButton");
@@ -1420,11 +1409,19 @@ export class AppUI {
     return this.micLevel;
   }
 
+  /** System camera API — used for the live AR preview only. */
+  async requestCameraStream() {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      throw new Error("Camera API unavailable in this browser or context.");
+    }
+    return navigator.mediaDevices.getUserMedia({
+      video: { facingMode: { ideal: "user" } },
+      audio: false,
+    });
+  }
+
   // Yêu cầu camera: bật/tắt robust, request camera, xử lý lỗi.
   async requestCamera() {
-    // #region agent log
-    fetch('http://127.0.0.1:7243/ingest/53d0209c-35d3-4927-ba1e-aa88e05e7ed6',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'a93ced'},body:JSON.stringify({sessionId:'a93ced',runId:'qualtrics-video-debug-1',hypothesisId:'H5',location:'src/ui.js:requestCamera:start',message:'requestCamera called (should not happen in embedded-video mode)',data:{href:window.location.href},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
     // Nếu đang bật camera -> toggle OFF
     if (this.usingCamera) {
       this.logger.addInteraction({ demo: true });
@@ -1433,32 +1430,39 @@ export class AppUI {
       return;
     }
 
-    // UI-only hard guard:
-    // Even if Qualtrics/embedded environment triggers requestCamera(),
-    // we MUST NOT call getUserMedia. We render the embedded mp4 instead.
     const camBtn = document.getElementById("demoCameraButton");
     const statusChip = document.getElementById("demoStatusChip");
 
     if (camBtn instanceof HTMLButtonElement) {
       camBtn.disabled = true;
-      camBtn.textContent = "Starting demo…";
+      camBtn.textContent = "Starting camera…";
     }
     if (statusChip) {
       statusChip.innerHTML =
-        '<span class="chip-dot"></span><span>Demo video starting</span>';
+        '<span class="chip-dot"></span><span>Opening camera…</span>';
     }
 
     try {
-      await this.enableEmbeddedVideoView();
+      const stream = await this.requestCameraStream();
+      await this.enableCameraView(stream);
+      this.logger.setCameraPermission("granted");
       this.updateDemoGatingState();
       if (camBtn instanceof HTMLButtonElement) {
         camBtn.disabled = false;
         camBtn.textContent = "Stop camera";
       }
     } catch (err) {
-      console.error("Embedded demo video failed:", err);
+      console.error("Camera failed:", err);
+      const name = err && err.name;
+      this.logger.setCameraPermission(
+        name === "NotAllowedError" || name === "PermissionDeniedError"
+          ? "denied"
+          : "error"
+      );
       this.showCameraUnavailable(
-        "Demo video could not start. Please try again."
+        name === "NotAllowedError" || name === "PermissionDeniedError"
+          ? "Camera access was blocked. Allow camera in settings and try again."
+          : "Could not access the camera. Please try again."
       );
       if (camBtn instanceof HTMLButtonElement) {
         camBtn.disabled = false;
@@ -1467,16 +1471,25 @@ export class AppUI {
     }
   }
 
-  // Kích hoạt camera view: chuẩn bị UI, bật video trực tiếp, set filter
+  // Kích hoạt camera view: chuẩn bị UI, bật luồng camera trực tiếp, set filter + AR overlay
   async enableCameraView(stream) {
     const video = document.getElementById("demoCameraVideo");
-    const overlay = document.getElementById("demoCameraOverlayCanvas");
     const placeholder = document.getElementById("demoPlaceholder");
     const statusChip = document.getElementById("demoStatusChip");
     if (!(video instanceof HTMLVideoElement)) return;
 
+    if (this.cameraStream && this.cameraStream !== stream) {
+      try {
+        this.cameraStream.getTracks().forEach((t) => t.stop());
+      } catch (_) {}
+    }
+    this.cameraStream = stream;
+
+    video.removeAttribute("src");
+    video.loop = false;
     video.setAttribute("playsinline", "");
     video.muted = true;
+    video.volume = 0;
     video.srcObject = stream;
     
     // Mirror video for selfie view
@@ -1495,14 +1508,20 @@ export class AppUI {
       await video.play();
       video.style.display = "block";
     } catch (e) {
-      console.warn("Autoplay failed:", e);
+      console.warn("Camera preview playback failed:", e);
+      try {
+        stream.getTracks().forEach((t) => t.stop());
+      } catch (_) {}
+      this.cameraStream = null;
+      video.srcObject = null;
       this.showCameraUnavailable(
-        "Camera was granted but video could not autoplay. Please tap the video area once, then try again."
+        "The camera started but preview could not play. Tap the preview area once, or refresh and allow camera access."
       );
       video.style.display = "none";
+      if (placeholder) placeholder.style.display = "flex";
+      return;
     }
 
-    // Mark camera as used
     this.hasUsedCamera = true;
 
     if (statusChip) {
@@ -1512,90 +1531,14 @@ export class AppUI {
 
     this.usingCamera = true;
 
-    // Camera access is considered granted when the stream is enabled successfully.
+    // Camera access is considered granted when the stream is previewing successfully.
     this.cameraGranted = true;
+    this.logger.markCameraPreviewReady();
 
-    // Start face tracking
     try {
       await this.ensureFaceTracking(video, document.getElementById("demoFrame"));
     } catch (e) {
       console.warn("Face tracking init failed:", e);
-    }
-  }
-
-  async enableEmbeddedVideoView() {
-    const video = document.getElementById("demoCameraVideo");
-    const placeholder = document.getElementById("demoPlaceholder");
-    const statusChip = document.getElementById("demoStatusChip");
-    if (!(video instanceof HTMLVideoElement)) return;
-
-    // #region agent log
-    fetch('http://127.0.0.1:7243/ingest/53d0209c-35d3-4927-ba1e-aa88e05e7ed6',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'a93ced'},body:JSON.stringify({sessionId:'a93ced',runId:'qualtrics-video-debug-1',hypothesisId:'H1',location:'src/ui.js:enableEmbeddedVideoView:start',message:'enableEmbeddedVideoView called',data:{href:window.location.href,pathname:window.location.pathname,videoExists:!!video,readyState:video.readyState,currentSrc:video.currentSrc},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
-
-    video.setAttribute("playsinline", "");
-    video.setAttribute("muted", "");
-    video.muted = true;
-    video.defaultMuted = true;
-    video.volume = 0;
-    video.loop = true;
-    video.srcObject = null;
-    const sourceCandidates = [
-      "./Chỉnh_sửa_video_chân_thật_hơn.mp4",
-      "/public/Chỉnh_sửa_video_chân_thật_hơn.mp4",
-      "/Chỉnh_sửa_video_chân_thật_hơn.mp4",
-    ];
-    video.onloadedmetadata = () => {
-      if (video.audioTracks && video.audioTracks.length > 0) {
-        for (let i = 0; i < video.audioTracks.length; i++) {
-          video.audioTracks[i].enabled = false;
-        }
-      }
-    };
-    video.style.transform = "none";
-    video.style.display = "none";
-    video.style.filter = this.isFilterMuted
-      ? "brightness(1.1) saturate(1.2) contrast(1.05) blur(0.4px) sepia(0.1)"
-      : "none";
-    video.style.transition = "filter 0.3s ease";
-
-    if (placeholder) placeholder.style.display = "none";
-
-    let played = false;
-    for (const src of sourceCandidates) {
-      try {
-        video.src = src;
-        video.load();
-        await video.play();
-        played = true;
-        // #region agent log
-        fetch('http://127.0.0.1:7243/ingest/53d0209c-35d3-4927-ba1e-aa88e05e7ed6',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'a93ced'},body:JSON.stringify({sessionId:'a93ced',runId:'qualtrics-video-debug-1',hypothesisId:'H2',location:'src/ui.js:enableEmbeddedVideoView:play-success',message:'video.play succeeded',data:{src,readyState:video.readyState,currentSrc:video.currentSrc,paused:video.paused},timestamp:Date.now()})}).catch(()=>{});
-        // #endregion
-        break;
-      } catch (e) {
-        console.warn("Demo video source failed:", src, e);
-        // #region agent log
-        fetch('http://127.0.0.1:7243/ingest/53d0209c-35d3-4927-ba1e-aa88e05e7ed6',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'a93ced'},body:JSON.stringify({sessionId:'a93ced',runId:'qualtrics-video-debug-1',hypothesisId:'H3',location:'src/ui.js:enableEmbeddedVideoView:play-failed',message:'video.play failed for candidate',data:{src,errorName:e?.name||null,errorMessage:e?.message||String(e||''),videoErrorCode:video.error?.code||null,videoErrorName:video.error?.name||null,readyState:video.readyState,currentSrc:video.currentSrc},timestamp:Date.now()})}).catch(()=>{});
-        // #endregion
-      }
-    }
-    if (!played) {
-      console.warn("Demo video playback failed for all sources");
-      // #region agent log
-      fetch('http://127.0.0.1:7243/ingest/53d0209c-35d3-4927-ba1e-aa88e05e7ed6',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'a93ced'},body:JSON.stringify({sessionId:'a93ced',runId:'qualtrics-video-debug-1',hypothesisId:'H4',location:'src/ui.js:enableEmbeddedVideoView:all-failed',message:'all video candidates failed',data:{candidates:sourceCandidates,finalReadyState:video.readyState,currentSrc:video.currentSrc,paused:video.paused},timestamp:Date.now()})}).catch(()=>{});
-      // #endregion
-      video.controls = true;
-    }
-    video.style.display = "block";
-
-    this.hasUsedCamera = true;
-    this.usingCamera = true;
-    this.cameraGranted = true;
-    this.logger.setCameraPermission("simulated");
-
-    if (statusChip) {
-      statusChip.innerHTML =
-        '<span class="chip-dot"></span><span>Demo video playing</span>';
     }
   }
 

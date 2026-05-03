@@ -6,6 +6,10 @@
       name="viewport"
       content="width=device-width, initial-scale=1, viewport-fit=cover"
     />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="format-detection" content="telephone=no" />
     <title>AR Filter Demo</title>
     <style>
       :root {
@@ -19,34 +23,74 @@
         --danger: #ef4444;
         --border-subtle: #e5e7eb;
         --card-radius: 18px;
+        --safe-top: env(safe-area-inset-top, 0px);
+        --safe-right: env(safe-area-inset-right, 0px);
+        --safe-bottom: env(safe-area-inset-bottom, 0px);
+        --safe-left: env(safe-area-inset-left, 0px);
+        --touch-min: 44px;
         --font-main: -apple-system, system-ui, BlinkMacSystemFont, "SF Pro Text",
-          "Segoe UI", sans-serif;
+          "Segoe UI", "Roboto", "Helvetica Neue", Arial, sans-serif;
       }
 
       * {
         box-sizing: border-box;
       }
 
+      html {
+        -webkit-text-size-adjust: 100%;
+        text-size-adjust: 100%;
+        height: 100%;
+      }
+
+      html,
+      body {
+        overflow-x: clip;
+      }
+
+      /* Vertical centering on laptop/desktop; margin-block:auto avoids clipping tall screens when content overflows */
       body {
         margin: 0;
+        min-height: 100%;
         min-height: 100vh;
+        min-height: 100dvh;
+        min-height: -webkit-fill-available;
+        box-sizing: border-box;
+        display: flex;
+        flex-direction: column;
+        align-items: stretch;
+        padding: max(12px, var(--safe-top)) max(12px, var(--safe-right))
+          max(12px, var(--safe-bottom)) max(12px, var(--safe-left));
         font-family: var(--font-main);
         background: radial-gradient(circle at top, #ffffff 0, #e5e7f0 55%, #dde1ee 100%);
         color: var(--fg);
         -webkit-font-smoothing: antialiased;
+        touch-action: manipulation;
       }
 
       .app-root {
-        min-height: 100vh;
+        flex: 0 1 auto;
+        width: 100%;
+        max-width: 100%;
+        margin-top: auto;
+        margin-bottom: auto;
         display: flex;
         justify-content: center;
         align-items: center;
-        padding: 16px;
+      }
+
+      @media (min-width: 768px) {
+        body {
+          padding-top: max(24px, var(--safe-top));
+          padding-bottom: max(24px, var(--safe-bottom));
+        }
       }
 
       .app-shell {
         width: 100%;
         max-width: 420px;
+        max-height: min(94vh, 920px);
+        max-height: min(94dvh, 920px);
+        max-height: min(94svh, 920px);
         background: var(--bg-alt);
         border-radius: 28px;
         border: 1px solid rgba(15, 23, 42, 0.06);
@@ -56,6 +100,82 @@
         display: flex;
         flex-direction: column;
         overflow: hidden;
+      }
+
+      /* Full-screen overlays — safe areas + scroll if content is tall (iPad / small phones) */
+      .ar-permission-overlay {
+        position: fixed;
+        inset: 0;
+        z-index: 999;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: max(16px, var(--safe-top)) max(16px, var(--safe-right))
+          max(16px, var(--safe-bottom)) max(16px, var(--safe-left));
+        box-sizing: border-box;
+        background: rgba(15, 23, 42, 0.55);
+        backdrop-filter: blur(6px);
+        -webkit-backdrop-filter: blur(6px);
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
+      }
+
+      /* Privacy notice replay (darker, stronger blur) */
+      .ar-modal-overlay {
+        position: fixed;
+        inset: 0;
+        z-index: 999;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: max(16px, var(--safe-top)) max(16px, var(--safe-right))
+          max(16px, var(--safe-bottom)) max(16px, var(--safe-left));
+        box-sizing: border-box;
+        background: rgba(15, 23, 42, 0.85);
+        backdrop-filter: blur(8px);
+        -webkit-backdrop-filter: blur(8px);
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
+      }
+
+      .ar-modal-overlay .card {
+        max-width: min(420px, 100%);
+        width: 100%;
+        margin: auto;
+      }
+
+      .ar-permission-card {
+        width: 100%;
+        max-width: min(320px, 100%);
+        border-radius: 16px;
+        background: #f9fafb;
+        box-shadow: 0 18px 45px rgba(15, 23, 42, 0.45);
+        padding: 16px 16px 10px;
+        font-family: var(--font-main);
+        margin: auto;
+      }
+
+      @media (pointer: coarse) {
+        .ar-permission-card button[type="button"] {
+          min-height: var(--touch-min);
+          padding-top: 12px;
+          padding-bottom: 12px;
+        }
+      }
+
+      /* 16px+ on inputs avoids iOS zoom-on-focus; keeps desktop readable */
+      #feedbackTextarea {
+        font-size: max(16px, 0.875rem);
+        width: 100%;
+        min-height: 140px;
+        resize: vertical;
+        border-radius: 12px;
+        border: 1px solid rgba(148, 163, 184, 0.6);
+        padding: 12px;
+        line-height: 1.4;
+        outline: none;
+        -webkit-appearance: none;
+        appearance: none;
       }
 
       .app-header {
@@ -136,16 +256,20 @@
       }
 
       .screen-title {
-        font-size: 19px;
+        font-size: clamp(17px, 2.8vw + 0.5rem, 19px);
         font-weight: 600;
         letter-spacing: 0.01em;
         margin-bottom: 2px;
+        word-wrap: break-word;
+        overflow-wrap: anywhere;
       }
 
       .screen-subtitle {
-        font-size: 14px;
+        font-size: clamp(13px, 1.2vw + 0.55rem, 14px);
         color: var(--fg-muted);
         line-height: 1.5;
+        word-wrap: break-word;
+        overflow-wrap: anywhere;
       }
 
       .screen-subtitle-intro {
@@ -815,9 +939,26 @@
         font-weight: 600;
       }
 
+      /* Tablet portrait / small laptop — fluid shell width */
+      @media (min-width: 481px) and (max-width: 1024px) {
+        .app-shell {
+          max-width: min(420px, 92vw);
+        }
+
+        .app-body {
+          padding: 18px max(18px, var(--safe-right)) 14px max(18px, var(--safe-left));
+        }
+      }
+
       @media (max-width: 480px) {
         .app-shell {
           border-radius: 24px;
+          max-height: min(96dvh, 920px);
+          max-height: min(96vh, 920px);
+        }
+
+        .app-body {
+          padding: 14px max(14px, var(--safe-right)) 12px max(14px, var(--safe-left));
         }
 
         .demo-video-frame {
@@ -825,8 +966,51 @@
         }
         .demo-social-ui { padding: 10px; }
         .record-btn {
-          width: 40px;
-          height: 40px;
+          width: 44px;
+          height: 44px;
+        }
+
+        .feature-icon {
+          width: 44px;
+          height: 44px;
+        }
+
+        .extra-features {
+          gap: 12px;
+          right: max(12px, var(--safe-right));
+        }
+      }
+
+      /* Touch devices: minimum tap targets without changing desktop density */
+      @media (pointer: coarse) {
+        .btn {
+          min-height: var(--touch-min);
+        }
+
+        .btn-row {
+          flex-wrap: wrap;
+        }
+
+        .exit-icon {
+          min-width: var(--touch-min);
+          min-height: var(--touch-min);
+        }
+
+        .badge-link {
+          padding: 6px 2px;
+          min-height: 44px;
+          display: inline-flex;
+          align-items: center;
+        }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        .demo-pulse-ring,
+        .demo-grain-overlay,
+        .scan-line,
+        .bar,
+        .record-btn::after {
+          animation: none !important;
         }
       }
 
@@ -898,9 +1082,7 @@
         <main class="app-body" id="appBody"></main>
       </div>
     </div>
-    <!-- Social UI overlay example (Instagram/TikTok style, for demo-purposes only):
-         You should inject/append this overlay inside your .demo-video-frame in your JS/React/whatever for the real camera view demo.
-         Below is a static example for illustration. -->
+    <!-- Social UI overlay template (cloned into .demo-video-frame for the live camera + AR demo). -->
     <template id="social-ui-template">
       <div class="demo-social-ui">
         <div class="ui-top">

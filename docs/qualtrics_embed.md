@@ -45,38 +45,43 @@ The iframe sends:
 
 | Event | When |
 |-------|------|
-| **AR_PROTO_AUDIT** | Valid load; confirms which stimulus rendered (`cid`, validation flags). |
-| **AR_PROTO_COMPLETE** | Participant taps **Return to survey** on the exit screen. |
+| **AR_PROTO_AUDIT** | Valid load; echoes rendered stimulus (**assigned vs rendered** QA). Payload is `{ type, payload }`. |
+| **AR_PROTO_COMPLETE** | Participant taps **Return to survey** on the exit screen. Same echo + timings & interaction summaries. |
 | **AR_PROTO_ERROR** | Missing/invalid `cid` — participant should not proceed to analysis without fixing deployment/URL. |
 
-Example **`AR_PROTO_COMPLETE`** payload includes **`cid`**, **`condition_id`**, **`returned_condition_id`**, module, bundle, dwell times, **`condition_valid`**, etc. Mirror fields into Embedded Data via JavaScript on the survey page.
+See **`docs/qualtrics_option_b_embedded_data.md`** for the full Embedded Data strategy (`condition_id` Qualtrics vs `ar_*` mirrors, manipulation-check columns, QC rules, listener sketch).
 
-Example listener sketch:
+`payload.media_mode` is **`live_camera`** (browser preview for AR); mic/album prompts remain in-app UIs (`microphone_requested` / `photo_library_requested` flags — see **`src/protoPayload.js`**).
+
+Example **`AR_PROTO_COMPLETE`** `payload` includes **`cid`**, **`condition_num`**, **`returned_condition_id`**, **`scope`** (narrow/broad), `policy_section_shown`, **`sharing_displayed`/`retention_displayed`** as 0|1 integers, dwell times, **`condition_valid`**, etc. Mirror fields into Embedded Data via JavaScript on the survey page.
+
+Prefer the full **`AR_PROTO_AUDIT` + `AR_PROTO_COMPLETE`** pattern in **`qualtrics_option_b_embedded_data.md`**. Minimal listener sketch (always validate **`event.origin`** in production):
 
 ```javascript
 Qualtrics.SurveyEngine.addOnload(function () {
   function handleMessage(event) {
     var d = event.data;
     if (!d || !d.type) return;
-    if (d.type === "AR_PROTO_COMPLETE" && d.payload) {
-      var p = d.payload;
-      Qualtrics.SurveyEngine.setEmbeddedData("ar_cid", p.cid || "");
+    var p = d.payload || {};
+    if (d.type === "AR_PROTO_COMPLETE") {
       Qualtrics.SurveyEngine.setEmbeddedData(
         "ar_returned_condition_id",
-        String(p.returned_condition_id || "")
+        String(p.returned_condition_id || p.cid || "")
       );
       Qualtrics.SurveyEngine.setEmbeddedData("ar_complete", "1");
-      window.removeEventListener("message", handleMessage);
     }
     if (d.type === "AR_PROTO_ERROR") {
-      Qualtrics.SurveyEngine.setEmbeddedData("ar_error_code", d.payload.code || "");
+      Qualtrics.SurveyEngine.setEmbeddedData(
+        "ar_error_code",
+        (p.code || "").toString()
+      );
     }
   }
   window.addEventListener("message", handleMessage);
 });
 ```
 
-QC: compare Qualtrics **`condition_id`** (assigned in Flow) with **`ar_cid`** / **`returned_condition_id`** from the completion payload.
+QC: compare Survey Flow **`condition_id`** (assigned) with **`payload.cid`** / **`payload.returned_condition_id`** (rendered / completed).
 
 **Option B privacy:** For **`M1_*`** assignments, completion payloads use **`retention_condition: "not_displayed"`** because retention text was not shown. For **`M2_*`**, **`sharing_condition: "not_displayed"`**. Rely on **`displayed_policy_sections`**, **`sharing_displayed`**, and **`retention_displayed`** when exporting analysis-ready columns.
 

@@ -2,9 +2,12 @@ import {
   getConditionFromParams,
   isLocalDevHost,
   STIMULUS_VERSION,
-  SCREEN_ORDER_VERSION,
 } from "./conditions.js";
 import { initPostMessageOrigin, sendMessage } from "./postmessage.js";
+import {
+  conditionEchoFields,
+  mediaRequestFlags,
+} from "./protoPayload.js";
 import { AppUI } from "./ui.js";
 
 function showErrorState(root, err, { urlSearch, debug } = {}) {
@@ -52,12 +55,14 @@ function init() {
     sendMessage({
       type: "AR_PROTO_ERROR",
       payload: {
+        type: "AR_PROTO_ERROR",
         code: result.error.code,
         message: result.error.message,
         url_search: window.location.search || "",
         cid_param: cidParamRaw,
         cond_param: Number.isFinite(condParam) ? condParam : null,
         stimulus_version: STIMULUS_VERSION,
+        error_ts_iso: new Date().toISOString(),
         ts_ms: Date.now(),
       },
     });
@@ -74,49 +79,31 @@ function init() {
 
   const { condition, validation, resolved_cid, cid_source } = result;
 
+  const auditEcho = conditionEchoFields(condition);
+
   sendMessage({
     type: "AR_PROTO_AUDIT",
     payload: {
-      cid: condition.cid,
-      condition_id: condition.condition_id,
-      returned_condition_id: condition.condition_id,
-      module: condition.module,
-      module_label: condition.module_label,
-      focal_policy_cue: condition.focal_policy_cue,
-      displayed_policy_sections: condition.displayed_policy_sections,
+      type: "AR_PROTO_AUDIT",
+      ...auditEcho,
+      ...mediaRequestFlags(),
 
-      access_bundle: condition.access_bundle,
-      data_type: condition.data_type,
-      data_type_label: condition.data_type_label,
-      scope_profile: condition.scope_profile,
-      scope: condition.scope,
-      scope_label: condition.scope_label,
-      photo: condition.photo,
-      photo_access: condition.photo_access,
-      camera_mic_scope: condition.camera_mic_scope,
+      cid_source: cid_source || "query",
+      condition_valid: validation.valid,
 
-      sharing_condition: condition.sharing_condition,
-      sharing_displayed: condition.sharing_displayed,
-      retention_condition: condition.retention_condition,
-      retention_displayed: condition.retention_displayed,
+      audit_timestamp: new Date().toISOString(),
+      audit_ts_ms: Date.now(),
 
-      stimulus_version: condition.stimulus_version || STIMULUS_VERSION,
-      screen_order_version: SCREEN_ORDER_VERSION,
-
-      url_search: window.location.search || "",
+      resolved_cid,
       cid_param_present: cidParamRaw != null && cidParamRaw !== "",
       cid_param_value: cidParamRaw || null,
-      resolved_cid: resolved_cid,
-      cid_source: cid_source || "query",
+      url_search: window.location.search || "",
       local_dev_host: isLocalDevHost(),
       cond_param_present: condParamRaw != null && condParamRaw !== "",
       cond_param_value: Number.isFinite(condParam) ? condParam : null,
 
       validation_ok: validation.valid,
       validation_mismatches: validation.mismatches || [],
-      condition_valid: validation.valid,
-
-      ts_ms: Date.now(),
     },
   });
 

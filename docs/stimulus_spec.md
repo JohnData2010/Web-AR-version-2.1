@@ -1,7 +1,7 @@
 # Stimulus specification — Web AR prototype (Option B privacy)
 
-**Stimulus version:** `2.1`  
-**Screen order version:** `privacy-option-b-v1` — Intro → **single-cue privacy notice** → App permissions → Demo → Exit  
+**Stimulus version:** `v3_option_b`  
+**Screen order version:** `intro_notice_permission_demo_exit` — Intro → **single-cue privacy notice** → App permissions → Demo → Exit  
 
 **Option B:** The privacy notice shows **only one** manipulation block per participant:
 
@@ -64,9 +64,14 @@ Wording for A1/A2/C1/C2 is unchanged; only **which** paragraph appears changes b
 
 ## PostMessage
 
-See **`AR_PROTO_AUDIT`** / **`AR_PROTO_COMPLETE`** in code: includes `focal_policy_cue`, `displayed_policy_sections`, `sharing_displayed`, `retention_displayed`, `sharing_condition`, `retention_condition`, `photo_access`, `camera_mic_scope`, etc.
+Messages use shape `{ type, payload }`. Field builders live in `src/protoPayload.js` (`conditionEchoFields`, `mediaRequestFlags`).
 
-**QC:** Compare Qualtrics-assigned `cid` with `cid` / `returned_condition_id` in completion payload. Never interpret `retention_condition` as “shown” when value is `not_displayed` (Module 1), or `sharing_condition` when `not_displayed` (Module 2).
+- **`AR_PROTO_AUDIT`** (load): echoes assigned stimulus (`cid`, `condition_num`, `module`, bundles, **`scope`** as narrow/broad via `scope_profile`, `policy_section_shown`, manipulation flags `sharing_displayed` / `retention_displayed` as **0|1**, `media_mode`: `live_camera`, `webcam_requested`/`microphone_requested`/`photo_library_requested`).
+- **`AR_PROTO_COMPLETE`** (Return to survey): same echo plus dwell times, interaction counts, `camera_preview_ready` / legacy `video_loaded`, permission summaries, viewport, `lag_frame_count`.
+
+**QC:** Compare Qualtrics Embedded Data **`condition_id`** (assigned, e.g. `M1_C6`) with **`payload.cid`** and **`payload.returned_condition_id`**. Never treat `retention_condition` as “shown” when `not_displayed` (M1); same for sharing on M2.
+
+Embedded Data conventions and Qualtrics JS examples: **`docs/qualtrics_option_b_embedded_data.md`**.
 
 ---
 

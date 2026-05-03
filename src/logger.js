@@ -1,7 +1,5 @@
-import {
-  SCREEN_ORDER_VERSION,
-  STIMULUS_VERSION,
-} from "./conditions.js";
+import { STIMULUS_VERSION } from "./conditions.js";
+import { MEDIA_MODE, conditionEchoFields } from "./protoPayload.js";
 
 export class Logger {
   constructor() {
@@ -23,9 +21,25 @@ export class Logger {
 
     this.cameraPermission = "unknown";
 
+    this.demoEntered = false;
+    this.permissionContinueClicked = false;
+    this.cameraPreviewReady = false;
+
     this._rafId = null;
     this._lastFrameMs = null;
     this._longFrameCount = 0;
+  }
+
+  markDemoEntered() {
+    this.demoEntered = true;
+  }
+
+  markPermissionContinueClicked() {
+    this.permissionContinueClicked = true;
+  }
+
+  markCameraPreviewReady() {
+    this.cameraPreviewReady = true;
   }
 
   addInteraction(opts = {}) {
@@ -107,7 +121,10 @@ export class Logger {
     this._lastFrameMs = null;
   }
 
-  getSummary(condition, { condition_valid = true } = {}) {
+  getSummary(
+    condition,
+    { condition_valid = true, demo_completed = false } = {}
+  ) {
     const now = performance.now();
 
     const noticeMs =
@@ -127,53 +144,69 @@ export class Logger {
     const deviceType = this._getDeviceType();
     const lagFlag = this._longFrameCount >= 3;
 
-    const returnedId = condition.condition_id;
+    const totalStimulusMs = Math.round(now - this.startMs);
+    const vw =
+      typeof window !== "undefined" ? Math.round(window.innerWidth) : null;
+    const vh =
+      typeof window !== "undefined" ? Math.round(window.innerHeight) : null;
+
+    const micPerm = this.demoEntered ? "simulated" : "not_requested";
+    const photoPerm =
+      this.demoEntered && condition.photo_access !== "none"
+        ? "simulated"
+        : "not_requested";
+
+    const echo = conditionEchoFields(condition);
 
     return {
       type: "AR_PROTO_COMPLETE",
       payload: {
-        cid: condition.cid,
-        condition_id: returnedId,
-        returned_condition_id: returnedId,
-        module: condition.module,
-        module_label: condition.module_label,
-        focal_policy_cue: condition.focal_policy_cue,
-        displayed_policy_sections: condition.displayed_policy_sections,
+        ...echo,
+        returned_condition_id: condition.cid,
+        completion_status: "completed",
+        complete_timestamp: new Date().toISOString(),
+        complete_ts_ms: Date.now(),
 
-        access_bundle: condition.access_bundle,
-        data_type: condition.data_type,
-        data_type_label: condition.data_type_label,
-        scope_profile: condition.scope_profile,
-        scope: condition.scope,
-        scope_label: condition.scope_label,
-        photo: condition.photo,
-        photo_access: condition.photo_access,
-        camera_mic_scope: condition.camera_mic_scope,
+        condition_valid,
+        demo_completed: demo_completed ? 1 : 0,
 
-        sharing_condition: condition.sharing_condition,
-        sharing_displayed: condition.sharing_displayed,
-        retention_condition: condition.retention_condition,
-        retention_displayed: condition.retention_displayed,
-
-        stimulus_version: condition.stimulus_version || STIMULUS_VERSION,
-        screen_order_version: SCREEN_ORDER_VERSION,
-
-        device_type: deviceType,
-        camera_permission: this.cameraPermission,
-
-        time_on_prototype_ms: Math.round(now - this.startMs),
-        time_on_notice_ms: Math.round(noticeMs),
         notice_dwell_ms: Math.round(noticeMs),
         permission_dwell_ms: Math.round(permissionMs),
         demo_dwell_ms: Math.round(demoMs),
+        total_stimulus_ms: totalStimulusMs,
 
-        notice_review_opened_count: this.noticeReviewOpenedCount,
         interaction_count: this.interactionCount,
+        demo_interaction_count: this.demoInteractionCount,
+
+        permission_continue_clicked: this.permissionContinueClicked ? 1 : 0,
+        return_to_survey_clicked: 1,
+
+        demo_started: this.demoEntered ? 1 : 0,
+
+        /** Legacy alias; preview is camera stream when live (not embedded MP4). */
+        video_loaded: this.cameraPreviewReady ? 1 : 0,
+        camera_preview_ready: this.cameraPreviewReady ? 1 : 0,
+
+        media_mode: MEDIA_MODE,
+        camera_permission: this.cameraPermission,
+        microphone_permission: micPerm,
+        photo_permission: photoPerm,
+
+        webcam_requested: 1,
+        microphone_requested: 0,
+        photo_library_requested: 0,
+
+        device_type: deviceType,
+        viewport_width: vw,
+        viewport_height: vh,
 
         lag_flag: lagFlag,
+        lag_frame_count: this._longFrameCount,
+        stimulus_version: echo.stimulus_version || STIMULUS_VERSION,
 
-        condition_valid,
-        completion_status: "completed",
+        notice_review_opened_count: this.noticeReviewOpenedCount,
+        time_on_prototype_ms: totalStimulusMs,
+        time_on_notice_ms: Math.round(noticeMs),
 
         view_details_clicked: false,
       },

@@ -7,8 +7,11 @@
  * Localhost / ?debug=1: optional random or ?cond=1…16
  */
 
-export const STIMULUS_VERSION = "2.1";
-export const SCREEN_ORDER_VERSION = "privacy-option-b-v1";
+export const STIMULUS_VERSION = "v3_option_b";
+export const SCREEN_ORDER_VERSION = "intro_notice_permission_demo_exit";
+
+/** Option B — single focal section per respondent. */
+export const POLICY_MODE = "focal";
 
 /** Wording unchanged from prior prototype. */
 export const THIRD_PARTY_TEXT = {
@@ -80,10 +83,13 @@ function buildSharingCondition({ cid, condition_id, bundleKey, sharing }) {
   return {
     cid,
     condition_id,
+    condition_num: condition_id,
     module: "sharing",
     module_label: "Third-party sharing module",
     stimulus_version: STIMULUS_VERSION,
     ...b,
+    policy_mode: POLICY_MODE,
+    policy_section_shown: "sharing",
     focal_policy_cue: "sharing",
     displayed_policy_sections: ["sharing"],
     sharing_condition: sharing,
@@ -108,10 +114,13 @@ function buildRetentionCondition({ cid, condition_id, bundleKey, retention }) {
   return {
     cid,
     condition_id,
+    condition_num: condition_id,
     module: "retention",
     module_label: "Data retention module",
     stimulus_version: STIMULUS_VERSION,
     ...b,
+    policy_mode: POLICY_MODE,
+    policy_section_shown: "retention",
     focal_policy_cue: "retention",
     displayed_policy_sections: ["retention"],
     sharing_condition: "not_displayed",
