@@ -64,7 +64,7 @@ Wording for A1/A2/C1/C2 is unchanged; only **which** paragraph appears changes b
 
 ## PostMessage
 
-Messages use shape `{ type, payload }`. Field builders live in `src/protoPayload.js` (`conditionEchoFields`, `mediaRequestFlags`).
+Messages use shape `{ type, payload }`. Field builders live in `public/src/protoPayload.js` (`conditionEchoFields`, `mediaRequestFlags`).
 
 - **`AR_PROTO_AUDIT`** (load): echoes assigned stimulus (`cid`, `condition_num`, `module`, bundles, **`scope`** as narrow/broad via `scope_profile`, `policy_section_shown`, manipulation flags `sharing_displayed` / `retention_displayed` as **0|1**, `media_mode`: `live_camera`, `webcam_requested`/`microphone_requested`/`photo_library_requested`).
 - **`AR_PROTO_COMPLETE`** (Return to survey): same echo plus dwell times, interaction counts, `camera_preview_ready` / legacy `video_loaded`, permission summaries, viewport, `lag_frame_count`.

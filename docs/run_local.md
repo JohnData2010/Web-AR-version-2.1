@@ -6,12 +6,12 @@ This prototype is a static, client-side SPA intended to run inside a Qualtrics i
 
 - `public/index.html` — main AR demo entry page (to be embedded in Qualtrics).
 - `public/test-harness.html` — parent page to test `postMessage` (`cid` dropdown, `debug=1`).
-- `src/main.js` — bootstrap, **`cid`** validation, **`AR_PROTO_AUDIT`** / **`AR_PROTO_ERROR`**, init UI.
-- `src/ui.js` — screen flow: **Intro → Privacy notice → App permissions → Demo → Exit**.
-- `src/conditions.js` — sixteen **`cid`** conditions (`M1_C1`…`M2_C8`); see **`docs/stimulus_spec.md`**.
-- `src/logger.js` — dwell timers, interactions, lag flag, **`AR_PROTO_COMPLETE`** payload.
-- `src/protoPayload.js` — shared **`AR_PROTO_*`** stimulus echo (`conditionEchoFields`, **`media_mode`**: `live_camera`).
-- `src/postmessage.js` — origin-aware `postMessage` sender.
+- `public/src/main.js` — bootstrap, **`cid`** validation, **`AR_PROTO_AUDIT`** / **`AR_PROTO_ERROR`**, init UI.
+- `public/src/ui.js` — screen flow: **Intro → Privacy notice → App permissions → Demo → Exit**.
+- `public/src/conditions.js` — sixteen **`cid`** conditions (`M1_C1`…`M2_C8`); see **`docs/stimulus_spec.md`**.
+- `public/src/logger.js` — dwell timers, interactions, lag flag, **`AR_PROTO_COMPLETE`** payload.
+- `public/src/protoPayload.js` — shared **`AR_PROTO_*`** stimulus echo (`conditionEchoFields`, **`media_mode`**: `live_camera`).
+- `public/src/postmessage.js` — origin-aware `postMessage` sender.
 - **`docs/qualtrics_option_b_embedded_data.md`** — Embedded Data conventions (assigned vs `ar_*` mirrors, listener sketch).
 
 ### Running Locally

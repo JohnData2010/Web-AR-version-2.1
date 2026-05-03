@@ -51,7 +51,7 @@ The iframe sends:
 
 See **`docs/qualtrics_option_b_embedded_data.md`** for the full Embedded Data strategy (`condition_id` Qualtrics vs `ar_*` mirrors, manipulation-check columns, QC rules, listener sketch).
 
-`payload.media_mode` is **`live_camera`** (browser preview for AR); mic/album prompts remain in-app UIs (`microphone_requested` / `photo_library_requested` flags — see **`src/protoPayload.js`**).
+`payload.media_mode` is **`live_camera`** (browser preview for AR); mic/album prompts remain in-app UIs (`microphone_requested` / `photo_library_requested` flags — see **`public/src/protoPayload.js`**).
 
 Example **`AR_PROTO_COMPLETE`** `payload` includes **`cid`**, **`condition_num`**, **`returned_condition_id`**, **`scope`** (narrow/broad), `policy_section_shown`, **`sharing_displayed`/`retention_displayed`** as 0|1 integers, dwell times, **`condition_valid`**, etc. Mirror fields into Embedded Data via JavaScript on the survey page.
 

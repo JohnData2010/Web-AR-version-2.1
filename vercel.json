@@ -3,11 +3,11 @@
   "rewrites": [
     {
       "source": "/",
-      "destination": "/public/index.html"
+      "destination": "/index.html"
     },
     {
       "source": "/test-harness",
-      "destination": "/public/test-harness.html"
+      "destination": "/test-harness.html"
     }
   ],
   "headers": [

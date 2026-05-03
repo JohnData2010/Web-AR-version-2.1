@@ -4,7 +4,7 @@ Survey Flow should **randomise once** → set Embedded Data (**source of truth**
 
 The web app **echoes what it rendered** in **`AR_PROTO_AUDIT`** (on load) and **`AR_PROTO_COMPLETE`** (participant taps **Return to survey**).
 
-All application fields arrive under **`event.data.payload`** (see `src/main.js`, `src/logger.js`, `src/protoPayload.js`).
+All application fields arrive under **`event.data.payload`** (see `public/src/main.js`, `public/src/logger.js`, `public/src/protoPayload.js`).
 
 ---
 
@@ -29,7 +29,7 @@ Listen for **`AR_PROTO_AUDIT`** and **`AR_PROTO_COMPLETE`**; map at least:
 - **`module`**, **`access_bundle`**, **`data_type`**, **`scope`** (narrow/broad), **`camera_mic_scope`**, **`photo_access`**.
 - **`policy_section_shown`**, **`focal_policy_cue`**, **`sharing_condition`**, **`retention_condition`**, **`sharing_displayed`**, **`retention_displayed`** (0/1 integers).
 - **`media_mode`** — `live_camera` (browser camera for AR demo; mic/photos remain in-app simulated UIs unless you change the app).
-- **`webcam_requested`**, **`microphone_requested`**, **`photo_library_requested`** — see current `src/protoPayload.js` (`mediaRequestFlags`).
+- **`webcam_requested`**, **`microphone_requested`**, **`photo_library_requested`** — see current `public/src/protoPayload.js` (`mediaRequestFlags`).
 
 **Completion-only:** `notice_dwell_ms`, `permission_dwell_ms`, `demo_dwell_ms`, `total_stimulus_ms`, `interaction_count`, `demo_interaction_count`, `demo_started`, `demo_completed`, `camera_preview_ready` / `video_loaded`, `camera_permission`, `microphone_permission`, `photo_permission`, `device_type`, `viewport_width`, `viewport_height`, `lag_frame_count`, `complete_timestamp`.
 
@@ -141,7 +141,7 @@ Account-specific APIs (`setEmbeddedData` vs `setJSEmbeddedData` / `__js_` prefix
 
 ## Condition mapping (16 cells)
 
-Match Survey Flow randomiser to the same table as `src/conditions.js` / `CONDITIONS_BY_CID`. Each cell has explicit **`policy_section_shown`**, **`sharing_condition` / `retention_condition`** (with `not_displayed` where the factor is absent), and D1–D4 permission profile.
+Match Survey Flow randomiser to the same table as `public/src/conditions.js` / `CONDITIONS_BY_CID`. Each cell has explicit **`policy_section_shown`**, **`sharing_condition` / `retention_condition`** (with `not_displayed` where the factor is absent), and D1–D4 permission profile.
 
 ---
 

@@ -1143,7 +1143,7 @@
       
       tryLoadMediaPipe();
     </script>
-    <!-- Use absolute path so Vercel can find the module at /src/main.js -->
-    <script type="module" src="/src/main.js"></script>
+    <!-- Relative so it works under /public/ locally and / on Vercel (output = public/). -->
+    <script type="module" src="./src/main.js"></script>
   </body>
 </html>
