@@ -23,6 +23,22 @@ const SCREENS = {
   FEEDBACK: "feedback",
 };
 
+/** Short copy when the browser/OS blocked camera (e.g. Block / Don't allow). */
+const CAMERA_DENIED_SHORT =
+  "Allow the camera for this page, then turn the live camera on again.";
+
+/** True when getUserMedia failed because the user (or policy) denied camera access. */
+function isMediaPermissionUserDenial(err) {
+  if (!err || typeof err !== "object") return false;
+  const name = String(err.name || "");
+  if (name === "NotAllowedError" || name === "PermissionDeniedError") return true;
+  const msg = String(err.message || "").toLowerCase();
+  if (msg.includes("permission denied")) return true;
+  if (msg.includes("not allowed")) return true;
+  if (msg.includes("user denied")) return true;
+  return false;
+}
+
 export class AppUI {
   constructor({ root, condition, debug = false, condition_valid = true }) {
     this.root = root;
@@ -51,6 +67,17 @@ export class AppUI {
     this.demoMinMs = 0;
     this.demoInteractionCountAtStart = 0;
     this.demoTimerInterval = null;
+
+    /** True while any code path is awaiting getUserMedia (avoid duplicate / racing calls). */
+    this._cameraGumInProgress = false;
+    /** True after user denied system camera — visibility/focus may retry getUserMedia. */
+    this._cameraResumePending = false;
+    this._cameraResumeInFlight = false;
+    this._cameraPermStatusRef = null;
+    this._cameraPermOnChange = null;
+    this._cameraVisHandler = null;
+    this._cameraDeviceChangeHandler = null;
+    this._cameraDeviceDebounceTimer = 0;
 
     this.cameraStream = null;
     this.usingCamera = false;
@@ -180,6 +207,7 @@ export class AppUI {
     // nếu rời màn demo thì tắt camera để không giữ webcam chạy nền
     if (prev === SCREENS.DEMO && screen !== SCREENS.DEMO) {
       this.logger.markDemoHidden();
+      this.teardownCameraResumeListeners();
       this.stopCamera();
 
       // Nếu đang hiển thị overlay notice trong demo thì ẩn đi
@@ -500,6 +528,12 @@ export class AppUI {
 
     demoShell.appendChild(frame);
 
+    const cameraAlert = document.createElement("div");
+    cameraAlert.id = "demoCameraAlert";
+    cameraAlert.className = "demo-camera-alert";
+    cameraAlert.hidden = true;
+    demoShell.appendChild(cameraAlert);
+
     // CTA text
     const ctaText = document.createElement("div");
     ctaText.className = "demo-cta-text";
@@ -799,6 +833,9 @@ export class AppUI {
     this.cameraGranted = false;
     this.micGranted = false;
     this.photosGranted = false;
+    this._cameraResumePending = false;
+    this.hideDemoCameraAlert();
+    this.teardownCameraResumeListeners();
 
     // Bắt đầu timer kiểm tra gating
     this.startDemoGatingTimer();
@@ -845,23 +882,27 @@ export class AppUI {
       this.showPermissionPrompt(
         "camera",
         async () => {
+          this._cameraGumInProgress = true;
           try {
-            const stream = await this.requestCameraStream();
-            await this.enableCameraView(stream);
-            this.logger.setCameraPermission("granted");
-          } catch (err) {
-            console.error("Camera start failed:", err);
-            const name = err && err.name;
-            this.logger.setCameraPermission(
-              name === "NotAllowedError" || name === "PermissionDeniedError"
-                ? "denied"
-                : "error"
-            );
-            this.showCameraUnavailable(
-              name === "NotAllowedError" || name === "PermissionDeniedError"
-                ? "Camera access was blocked. You can allow it in your browser or system settings and try again."
-                : "Could not access the camera. Please check your device and try again."
-            );
+            try {
+              const stream = await this.requestCameraStream();
+              await this.enableCameraView(stream);
+              this.logger.setCameraPermission("granted");
+              this._cameraResumePending = false;
+            } catch (err) {
+              console.error("Camera start failed:", err);
+              const denied = isMediaPermissionUserDenial(err);
+              this.logger.setCameraPermission(denied ? "denied" : "error");
+              if (denied) this._cameraResumePending = true;
+              this.showCameraUnavailable(
+                denied
+                  ? CAMERA_DENIED_SHORT
+                  : "Could not open the camera. Try again in a moment.",
+                denied ? "denied" : "error"
+              );
+            }
+          } finally {
+            this._cameraGumInProgress = false;
           }
           promptMic();
         },
@@ -871,6 +912,7 @@ export class AppUI {
 
     // Always show the prompts at demo entry (so participants don't have to click filters).
     promptCamera();
+    void this.setupCameraResumeListeners();
   }
 
   onEnterExit() {
@@ -1409,6 +1451,100 @@ export class AppUI {
     return this.micLevel;
   }
 
+  teardownCameraResumeListeners() {
+    if (this._cameraVisHandler) {
+      document.removeEventListener("visibilitychange", this._cameraVisHandler);
+      window.removeEventListener("focus", this._cameraVisHandler);
+      this._cameraVisHandler = null;
+    }
+    if (this._cameraPermStatusRef && this._cameraPermOnChange) {
+      this._cameraPermStatusRef.removeEventListener("change", this._cameraPermOnChange);
+      this._cameraPermStatusRef = null;
+      this._cameraPermOnChange = null;
+    }
+    if (this._cameraDeviceChangeHandler && navigator.mediaDevices?.removeEventListener) {
+      navigator.mediaDevices.removeEventListener("devicechange", this._cameraDeviceChangeHandler);
+      this._cameraDeviceChangeHandler = null;
+    }
+    if (this._cameraDeviceDebounceTimer) {
+      clearTimeout(this._cameraDeviceDebounceTimer);
+      this._cameraDeviceDebounceTimer = 0;
+    }
+  }
+
+  /**
+   * When the participant fixes camera in browser / OS settings, retry getUserMedia without reload.
+   * Uses Permissions API where supported, plus visibility/focus and devicechange fallbacks.
+   */
+  async setupCameraResumeListeners() {
+    this.teardownCameraResumeListeners();
+
+    this._cameraVisHandler = () => {
+      if (document.hidden) return;
+      if (this.currentScreen !== SCREENS.DEMO) return;
+      if (!this._cameraResumePending) return;
+      this.tryResumeCameraAfterSystemAllow().catch(() => {});
+    };
+    document.addEventListener("visibilitychange", this._cameraVisHandler);
+    window.addEventListener("focus", this._cameraVisHandler);
+
+    if (navigator.mediaDevices?.addEventListener) {
+      this._cameraDeviceChangeHandler = () => {
+        if (this.currentScreen !== SCREENS.DEMO) return;
+        if (!this._cameraResumePending) return;
+        if (this._cameraGumInProgress || this._cameraResumeInFlight) return;
+        clearTimeout(this._cameraDeviceDebounceTimer);
+        this._cameraDeviceDebounceTimer = setTimeout(() => {
+          this._cameraDeviceDebounceTimer = 0;
+          this.tryResumeCameraAfterSystemAllow().catch(() => {});
+        }, 400);
+      };
+      navigator.mediaDevices.addEventListener("devicechange", this._cameraDeviceChangeHandler);
+    }
+
+    if (!navigator.permissions?.query) return;
+    try {
+      const status = await navigator.permissions.query({ name: "camera" });
+      this._cameraPermStatusRef = status;
+      this._cameraPermOnChange = () => {
+        if (this.currentScreen !== SCREENS.DEMO) return;
+        if (status.state === "granted") {
+          this.tryResumeCameraAfterSystemAllow().catch(() => {});
+        }
+      };
+      status.addEventListener("change", this._cameraPermOnChange);
+    } catch (_) {
+      // Safari / some contexts: camera is not a valid PermissionName
+    }
+  }
+
+  async tryResumeCameraAfterSystemAllow() {
+    if (this.currentScreen !== SCREENS.DEMO) return;
+    if (this._cameraGumInProgress) return;
+    if (this._cameraResumeInFlight) return;
+    const tracks = this.cameraStream?.getTracks?.() || [];
+    if (
+      this.usingCamera &&
+      tracks.length > 0 &&
+      tracks.some((t) => t.readyState === "live")
+    ) {
+      return;
+    }
+
+    this._cameraResumeInFlight = true;
+    try {
+      const stream = await this.requestCameraStream();
+      await this.enableCameraView(stream);
+      this.logger.setCameraPermission("granted");
+      this._cameraResumePending = false;
+      this.updateDemoGatingState();
+    } catch (e) {
+      console.warn("Camera auto-resume failed:", e);
+    } finally {
+      this._cameraResumeInFlight = false;
+    }
+  }
+
   /** System camera API — used for the live AR preview only. */
   async requestCameraStream() {
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
@@ -1442,10 +1578,12 @@ export class AppUI {
         '<span class="chip-dot"></span><span>Opening camera…</span>';
     }
 
+    this._cameraGumInProgress = true;
     try {
       const stream = await this.requestCameraStream();
       await this.enableCameraView(stream);
       this.logger.setCameraPermission("granted");
+      this._cameraResumePending = false;
       this.updateDemoGatingState();
       if (camBtn instanceof HTMLButtonElement) {
         camBtn.disabled = false;
@@ -1453,21 +1591,19 @@ export class AppUI {
       }
     } catch (err) {
       console.error("Camera failed:", err);
-      const name = err && err.name;
-      this.logger.setCameraPermission(
-        name === "NotAllowedError" || name === "PermissionDeniedError"
-          ? "denied"
-          : "error"
-      );
+      const denied = isMediaPermissionUserDenial(err);
+      this.logger.setCameraPermission(denied ? "denied" : "error");
+      if (denied) this._cameraResumePending = true;
       this.showCameraUnavailable(
-        name === "NotAllowedError" || name === "PermissionDeniedError"
-          ? "Camera access was blocked. Allow camera in settings and try again."
-          : "Could not access the camera. Please try again."
+        denied ? CAMERA_DENIED_SHORT : "Could not open the camera. Try again in a moment.",
+        denied ? "denied" : "error"
       );
       if (camBtn instanceof HTMLButtonElement) {
         camBtn.disabled = false;
         camBtn.textContent = "Stop camera";
       }
+    } finally {
+      this._cameraGumInProgress = false;
     }
   }
 
@@ -1515,12 +1651,16 @@ export class AppUI {
       this.cameraStream = null;
       video.srcObject = null;
       this.showCameraUnavailable(
-        "The camera started but preview could not play. Tap the preview area once, or refresh and allow camera access."
+        "Tap the video once or refresh the page, then allow the camera.",
+        "playback"
       );
       video.style.display = "none";
       if (placeholder) placeholder.style.display = "flex";
       return;
     }
+
+    this.hideDemoCameraAlert();
+    this._cameraResumePending = false;
 
     this.hasUsedCamera = true;
 
@@ -1542,19 +1682,68 @@ export class AppUI {
     }
   }
 
+  hideDemoCameraAlert() {
+    const alertEl = document.getElementById("demoCameraAlert");
+    if (!alertEl) return;
+    alertEl.hidden = true;
+    alertEl.classList.remove("is-visible");
+    alertEl.removeAttribute("role");
+    alertEl.replaceChildren();
+  }
+
   // Thông báo nếu camera bị lỗi hoặc không thể dùng
-  showCameraUnavailable(message) {
+  showCameraUnavailable(message, variant = "error") {
     const statusChip = document.getElementById("demoStatusChip");
     if (statusChip) {
-      statusChip.innerHTML =
-        '<span class="chip-dot chip-dot-warn"></span><span>Camera unavailable</span>';
+      const label =
+        variant === "denied"
+          ? "Camera blocked"
+          : variant === "playback"
+            ? "Preview issue"
+            : "Camera unavailable";
+      statusChip.innerHTML = `<span class="chip-dot chip-dot-warn"></span><span>${label}</span>`;
     }
     const cta = document.getElementById("demoCtaText");
-    if (cta) {
-      cta.textContent =
-        message +
-        " This step needs camera access. Please adjust your settings or switch devices, then try again.";
+    if (cta) cta.textContent = "";
+
+    const alertEl = document.getElementById("demoCameraAlert");
+    if (!alertEl) {
+      if (cta) cta.textContent = message;
+      return;
     }
+
+    const titleText =
+      variant === "denied"
+        ? "Turn on camera access"
+        : variant === "playback"
+          ? "Preview did not start"
+          : "Camera problem";
+
+    const tone =
+      variant === "denied" ? "demo-camera-alert--warning" : "demo-camera-alert--info";
+    alertEl.className = `demo-camera-alert is-visible ${tone}`;
+    alertEl.hidden = false;
+    alertEl.setAttribute("role", "alert");
+
+    const iconWrap = document.createElement("div");
+    iconWrap.className = "demo-camera-alert__icon";
+    iconWrap.setAttribute("aria-hidden", "true");
+    const svg =
+      variant === "denied"
+        ? '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M12 9v4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M12 17h.01" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/><path d="M10.3 3.3 2.6 17a1.7 1.7 0 0 0 1.5 2.5h16.8a1.7 1.7 0 0 0 1.5-2.5L13.7 3.3a1.7 1.7 0 0 0-3.4 0Z" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round"/></svg>'
+        : '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.75"/><path d="M12 8v5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M12 16h.01" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/></svg>';
+    iconWrap.innerHTML = svg;
+
+    const body = document.createElement("div");
+    body.className = "demo-camera-alert__body";
+    const title = document.createElement("div");
+    title.className = "demo-camera-alert__title";
+    title.textContent = titleText;
+    const p = document.createElement("p");
+    p.className = "demo-camera-alert__text";
+    p.textContent = message;
+    body.append(title, p);
+    alertEl.replaceChildren(iconWrap, body);
   }
 
   // === FACE TRACKING WITH MEDIAPIPE ===

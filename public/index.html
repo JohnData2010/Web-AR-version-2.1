@@ -886,6 +886,73 @@
         margin-top: 2px;
       }
 
+      /* Inline alert when camera is blocked or fails (high contrast, app-style notice) */
+      .demo-camera-alert {
+        display: none;
+        margin-top: 10px;
+        padding: 12px 14px;
+        border-radius: 12px;
+        align-items: flex-start;
+        gap: 12px;
+        box-shadow:
+          0 0 0 1px rgba(15, 23, 42, 0.06),
+          0 4px 14px rgba(15, 23, 42, 0.1);
+        border-width: 1px;
+        border-style: solid;
+      }
+
+      .demo-camera-alert.is-visible {
+        display: flex;
+      }
+
+      .demo-camera-alert--warning {
+        background: #fff7ed;
+        border-color: #f97316;
+        color: #7c2d12;
+      }
+
+      .demo-camera-alert--info {
+        background: #eff6ff;
+        border-color: #3b82f6;
+        color: #1e3a8a;
+      }
+
+      .demo-camera-alert__icon {
+        flex-shrink: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin-top: 1px;
+      }
+
+      .demo-camera-alert--warning .demo-camera-alert__icon {
+        color: #ea580c;
+      }
+
+      .demo-camera-alert--info .demo-camera-alert__icon {
+        color: #2563eb;
+      }
+
+      .demo-camera-alert__body {
+        min-width: 0;
+        flex: 1;
+      }
+
+      .demo-camera-alert__title {
+        font-size: 0.9375rem;
+        font-weight: 700;
+        letter-spacing: -0.015em;
+        line-height: 1.25;
+        margin: 0 0 6px;
+      }
+
+      .demo-camera-alert__text {
+        font-size: 0.8125rem;
+        line-height: 1.45;
+        margin: 0;
+        font-weight: 500;
+      }
+
       .demo-hint {
         font-size: 11px;
         color: #a16207;
