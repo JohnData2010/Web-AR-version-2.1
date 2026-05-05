@@ -23,6 +23,12 @@ const SCREENS = {
   FEEDBACK: "feedback",
 };
 
+/** History / retention: counter-clockwise arc + undo stem + clock hands (Lucide-style). */
+const RETENTION_NOTICE_ICON = `<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l4 2"/></svg>`;
+
+/** Third-party sharing: network share nodes (Lucide-style share-2). */
+const SHARING_NOTICE_ICON = `<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>`;
+
 /** Short copy when the browser/OS blocked camera (e.g. Block / Don't allow). */
 const CAMERA_DENIED_SHORT =
   "Allow the camera for this page, then turn the live camera on again.";
@@ -93,8 +99,8 @@ export class AppUI {
     this.hasUsedCamera = false;
     this.hasChosenStyle = false;
 
-    // Marks whether the participant has completed the demo.
-    // Used so "Back to demo (optional)" doesn't reset the 12s unlock timer.
+    // Marks whether the participant has completed the demo (left demo for exit).
+    // Keeps the demo Continue button unlocked if they navigate back from feedback.
     this.demoCompleted = false;
     this._prevScreen = null;
 
@@ -254,7 +260,7 @@ export class AppUI {
     const subtitle = document.createElement("div");
     subtitle.className = "screen-subtitle screen-subtitle-intro";
     subtitle.textContent =
-      "In this short demo, you will try an AR face filter similar to those used in social media apps. Before you begin, please review the access this feature may request and how related data may be handled. You will then try the demo before answering the survey questions.";
+      "Before you begin, please review the access this feature may request and how related data may be handled. You will then try the demo before answering the survey questions.";
 
     const btnRow = document.createElement("div");
     btnRow.className = "btn-row";
@@ -277,16 +283,37 @@ export class AppUI {
   buildNoticeSectionsInnerHtml() {
     const sections = this.condition.notice?.sections || [];
     return sections
-      .map(
-        (sec) => `
+      .map((sec) => {
+        if (sec.key === "retention") {
+          return `
+      <div class="notice-policy-block notice-retention-highlight" data-section="${escapeHtml(sec.key)}">
+        <div class="notice-retention-row">
+          <div class="notice-retention-icon" aria-hidden="true">${RETENTION_NOTICE_ICON}</div>
+          <div class="notice-retention-copy">
+            <p class="notice-policy-heading">${escapeHtml(sec.heading)}</p>
+            <p class="notice-policy-body">${renderInlineMarkdown(sec.body)}</p>
+          </div>
+        </div>
+      </div>`;
+        }
+        if (sec.key === "sharing") {
+          return `
+      <div class="notice-policy-block notice-sharing-highlight" data-section="${escapeHtml(sec.key)}">
+        <div class="notice-sharing-row">
+          <div class="notice-sharing-icon" aria-hidden="true">${SHARING_NOTICE_ICON}</div>
+          <div class="notice-sharing-copy">
+            <p class="notice-policy-heading">${escapeHtml(sec.heading)}</p>
+            <p class="notice-policy-body">${renderInlineMarkdown(sec.body)}</p>
+          </div>
+        </div>
+      </div>`;
+        }
+        return `
       <div class="notice-policy-block" data-section="${escapeHtml(sec.key)}">
-        <p><strong>${escapeHtml(sec.heading)}</strong></p>
-        <ul class="notice-factors" style="padding-left: 18px; margin: 8px 0 0 0; list-style: disc;">
-          <li style="margin-bottom: 0;">${renderInlineMarkdown(sec.body)}</li>
-        </ul>
-      </div>
-    `
-      )
+        <p class="notice-policy-heading">${escapeHtml(sec.heading)}</p>
+        <p class="notice-policy-body">${renderInlineMarkdown(sec.body)}</p>
+      </div>`;
+      })
       .join("");
   }
 
@@ -300,14 +327,14 @@ export class AppUI {
     title.textContent =
       this.condition.notice?.title || "Privacy Policy";
 
-    const subtitle = document.createElement("div");
-    subtitle.className = "screen-subtitle screen-subtitle-intro";
-    subtitle.textContent =
-      "This short policy explains how data related to the AR face filter feature may be handled.";
-
     const card = document.createElement("div");
-    card.className = "card card-contrast";
-    card.innerHTML = `<div class="notice-text">${this.buildNoticeSectionsInnerHtml()}</div>`;
+    const noticeShellFlat =
+      this.condition.module === "retention" ||
+      this.condition.module === "sharing";
+    card.className = noticeShellFlat
+      ? "notice-policy-outer-flat"
+      : "card card-contrast";
+    card.innerHTML = `<div class="notice-text notice-read-column">${this.buildNoticeSectionsInnerHtml()}</div>`;
 
     const btnRow = document.createElement("div");
     btnRow.className = "btn-row";
@@ -333,7 +360,7 @@ export class AppUI {
 
     btnRow.append(back, primary);
 
-    el.append(title, subtitle, card, btnRow);
+    el.append(title, card, btnRow);
     return el;
   }
 
@@ -344,55 +371,56 @@ export class AppUI {
 
     const title = document.createElement("div");
     title.className = "screen-title";
-    title.textContent = "App permissions for this demo";
+    title.textContent = "App permissions";
 
     const subtitle = document.createElement("div");
     subtitle.className = "screen-subtitle";
     subtitle.textContent =
-      "This demo shows the types of permissions an AR face filter feature may request.";
+      "Before the demo starts, please review the permissions this demo needs.";
 
     const card = document.createElement("div");
-    card.className = "card";
+    card.className = "card permissions-focal-card";
     const hasPhoto = this.condition.photo === "library";
     const scope = this.condition.scope || "while";
 
-    const listItems = [
-      "<li>Camera</li>",
-      "<li>Microphone</li>",
-      hasPhoto ? "<li>Albums (photos & videos)</li>" : "",
+    const CAMERA_ICON =
+      '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 8.5A2.5 2.5 0 0 1 5.5 6h8A2.5 2.5 0 0 1 16 8.5v7a2.5 2.5 0 0 1-2.5 2.5h-8A2.5 2.5 0 0 1 3 15.5v-7Z"/><path d="M16 10.5 21 8v8l-5-2.5"/></svg>';
+    const MIC_ICON =
+      '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M6 11a6 6 0 0 0 12 0"/><path d="M12 17v4"/><path d="M9 21h6"/></svg>';
+    const ALBUMS_ICON =
+      '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="10" r="1.5"/><path d="m5.5 17 4.5-4.5 3.2 3.2 2.3-2.3 3 3.6"/></svg>';
+
+    const cameraMicScopeValue =
+      scope === "only" ? "Only this time" : "Allow only while using the app";
+    const photoScopeValue =
+      scope === "only" ? "Select photos and videos" : "Allow all";
+
+    const permissionRows = [
+      { label: "Camera", icon: CAMERA_ICON, scope: cameraMicScopeValue },
+      { label: "Microphone", icon: MIC_ICON, scope: cameraMicScopeValue },
+      ...(hasPhoto
+        ? [{ label: "Photo library", icon: ALBUMS_ICON, scope: photoScopeValue }]
+        : []),
     ]
-      .filter(Boolean)
+      .map(
+        (item) => `
+        <div class="permission-item">
+          <div class="permission-item-icon-wrap" aria-hidden="true">${item.icon}</div>
+          <div class="permission-item-copy">
+            <p class="permission-item-title">${item.label}</p>
+            <p class="permission-item-access">Access is set to <span class="permission-panel-value">${item.scope}</span>.</p>
+          </div>
+        </div>
+      `
+      )
       .join("");
 
-    let scopeLine;
-    if (scope === "only") {
-      scopeLine =
-        'Access is set to <strong>Only this time</strong>. The app will not automatically ask again the next time you open this demo.';
-    } else {
-      scopeLine =
-        'Access is set to <strong>Allow only while using the app</strong>. When you close this page, access stops.';
-    }
-
-    let photoScopeLine = "";
-    if (hasPhoto) {
-      if (scope === "only") {
-        photoScopeLine =
-          '<p style="margin-top:6px;">For albums (photos & videos), access is set to <strong>"Select photos and videos"</strong>.</p>';
-      } else {
-        photoScopeLine =
-          '<p style="margin-top:6px;">For albums (photos & videos), access is set to <strong>"Allow all"</strong>.</p>';
-      }
-    }
-
     card.innerHTML = `
-      <div class="notice-text">
-        <p><strong>This demo may request access to:</strong></p>
-        <ul class="notice-factors" style="padding-left: 18px; margin: 8px 0 0 0; list-style: disc;">
-          ${listItems}
-        </ul>
-        <p style="margin-top:12px;"><strong>How long is access active?</strong></p>
-        <p>${scopeLine}</p>
-        ${photoScopeLine}
+      <div class="notice-text notice-read-column permission-panel">
+        <p class="permission-panel-lead">This app needs access to the following:</p>
+        <div class="permission-item-list">
+          ${permissionRows}
+        </div>
       </div>
     `;
 
@@ -410,7 +438,7 @@ export class AppUI {
 
     const primary = document.createElement("button");
     primary.className = "btn btn-primary";
-    primary.textContent = "Continue to demo";
+    primary.textContent = "Continue";
     primary.id = "permissionsContinueButton";
     primary.disabled = true;
     primary.classList.add("btn-disabled");
@@ -573,39 +601,29 @@ export class AppUI {
 
     const title = document.createElement("div");
     title.className = "screen-title";
-    title.textContent = "Demo complete — thank you!";
-
-    const subtitle = document.createElement("div");
-    subtitle.className = "screen-subtitle";
-    subtitle.textContent = "";
+    title.textContent = "Demo done";
 
     const card = document.createElement("div");
     card.className = "card card-contrast";
-    card.innerHTML =
-      '<div class="notice-text">Please return to the survey to continue.</div>';
+    const body = document.createElement("div");
+    body.className = "notice-text notice-read-column";
+    body.textContent =
+      "Thanks for trying the AR face filter. Next, we’ll ask a few questions about what you saw and what you think about the app.";
+    card.appendChild(body);
 
     const btnRow = document.createElement("div");
     btnRow.className = "btn-row";
 
-    const backBtn = document.createElement("button");
-    backBtn.className = "btn btn-secondary";
-    backBtn.textContent = "Back to demo (optional)";
-    backBtn.addEventListener("click", () => {
-      this.logger.addInteraction();
-      this.toScreen(SCREENS.DEMO);
-    });
-
-    const finishBtn = document.createElement("button");
-    finishBtn.className = "btn btn-primary";
-    finishBtn.textContent = "Return to survey";
-    finishBtn.addEventListener("click", () => {
+    const continueBtn = document.createElement("button");
+    continueBtn.className = "btn btn-primary";
+    continueBtn.textContent = "Continue";
+    continueBtn.addEventListener("click", () => {
       this.logger.addInteraction();
       this.finishAndSendData();
     });
 
-    btnRow.append(backBtn, finishBtn);
-
-    el.append(title, subtitle, card, btnRow);
+    btnRow.appendChild(continueBtn);
+    el.append(title, card, btnRow);
     return el;
   }
 
@@ -745,7 +763,7 @@ export class AppUI {
     const remainingSec = Math.ceil(remainingMs / 1000);
     const canContinue = remainingMs <= 0;
 
-    const originalText = btn.dataset.originalText || "Continue to demo";
+    const originalText = btn.dataset.originalText || "Continue";
     if (canContinue) {
       btn.disabled = false;
       btn.classList.remove("btn-disabled");
@@ -821,8 +839,7 @@ export class AppUI {
     this.logger.markDemoEntered();
     this.logger.startLagMonitor();
 
-    // Always treat demo entry as a fresh run so permissions are re-asked consistently
-    // across all conditions (including when participant taps "Back to demo").
+    // Always treat demo entry as a fresh run so permissions are re-asked consistently.
     this.demoCompleted = false;
 
     // Reset demo state
@@ -961,7 +978,12 @@ export class AppUI {
     overlay.className = "ar-modal-overlay";
 
     const card = document.createElement("div");
-    card.className = "card card-contrast";
+    const overlayFocalSheet =
+      this.condition.module === "retention" ||
+      this.condition.module === "sharing";
+    card.className = overlayFocalSheet
+      ? "card notice-overlay-focal-sheet"
+      : "card card-contrast";
 
     const heading = document.createElement("div");
     heading.className = "notice-heading";
@@ -970,7 +992,7 @@ export class AppUI {
     heading.style.marginBottom = "10px";
 
     const text = document.createElement("div");
-    text.className = "notice-text";
+    text.className = "notice-text notice-read-column";
     text.innerHTML = this.buildNoticeSectionsInnerHtml();
 
     const btnRow = document.createElement("div");
@@ -997,13 +1019,40 @@ export class AppUI {
     // #endregion
     const overlay = document.createElement("div");
     overlay.className = "ar-permission-overlay";
+    overlay.style.background = "rgba(15, 23, 42, 0.48)";
+    overlay.style.backdropFilter = "blur(4px)";
+    overlay.style.webkitBackdropFilter = "blur(4px)";
 
     const card = document.createElement("div");
     card.className = "ar-permission-card";
+    card.style.cssText =
+      "background:#ffffff;border:1px solid rgba(148,163,184,0.38);" +
+      "border-radius:16px;box-shadow:0 16px 34px rgba(15,23,42,0.32);" +
+      "padding:14px 0 0;max-width:min(332px,100%);overflow:hidden;";
+
+    const iconWrap = document.createElement("div");
+    iconWrap.setAttribute("aria-hidden", "true");
+    iconWrap.style.cssText =
+      "width:28px;height:28px;margin:0 auto 8px;border-radius:999px;" +
+      "display:flex;align-items:center;justify-content:center;color:#2563eb;";
+    if (kind === "camera") {
+      iconWrap.innerHTML =
+        '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8.5A2.5 2.5 0 0 1 5.5 6h8A2.5 2.5 0 0 1 16 8.5v7a2.5 2.5 0 0 1-2.5 2.5h-8A2.5 2.5 0 0 1 3 15.5v-7Z"/><path d="M16 10.5 21 8v8l-5-2.5"/></svg>';
+    } else if (kind === "microphone") {
+      iconWrap.innerHTML =
+        '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M6 11a6 6 0 0 0 12 0"/><path d="M12 17v4"/><path d="M9 21h6"/></svg>';
+    } else if (kind === "photos") {
+      iconWrap.innerHTML =
+        '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="10" r="1.5"/><path d="m5.5 17 4.5-4.5 3.2 3.2 2.3-2.3 3 3.6"/></svg>';
+    } else {
+      iconWrap.innerHTML =
+        '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 8v4"/><path d="M12 16h.01"/></svg>';
+    }
 
     const title = document.createElement("div");
     title.style.cssText =
-      "font-size:14px;font-weight:600;color:#111827;text-align:center;margin-bottom:8px;";
+      "font-size:15px;font-weight:500;color:#111827;text-align:center;" +
+      "margin:0 16px 8px;line-height:1.35;";
     const appName = "Face-Filter Demo";
     if (kind === "camera") {
       title.textContent = `Allow “${appName}” to access your camera?`;
@@ -1017,7 +1066,8 @@ export class AppUI {
 
     const message = document.createElement("div");
     message.style.cssText =
-      "font-size:12px;color:#4b5563;line-height:1.5;text-align:center;margin:0 4px 12px;";
+      "font-size:13px;color:#4b5563;line-height:1.45;text-align:center;" +
+      "margin:0 18px 12px;";
     if (kind === "camera") {
       message.textContent =
         "Allows the app to take pictures and record videos for this demo.";
@@ -1037,14 +1087,14 @@ export class AppUI {
 
     const buttonsCol = document.createElement("div");
     buttonsCol.style.cssText =
-      "display:flex;flex-direction:column;gap:8px;border-top:1px solid rgba(148,163,184,0.5);padding-top:10px;";
+      "display:flex;flex-direction:column;border-top:1px solid rgba(203,213,225,0.9);";
 
     const makeBtn = (label, styleCss, onClick) => {
       const btn = document.createElement("button");
       btn.type = "button";
       btn.textContent = label;
       btn.style.cssText =
-        "width:100%;border-radius:12px;padding:10px 12px;font-size:13px;font-weight:500;" +
+        "width:100%;border:none;border-radius:0 0 16px 16px;padding:13px 12px;font-size:14px;font-weight:500;min-height:48px;" +
         "cursor:pointer;" +
         styleCss;
       btn.addEventListener("click", onClick);
@@ -1070,7 +1120,8 @@ export class AppUI {
 
     /** Light “Only this time” style for every condition — outline + soft tint, not solid blue. */
     const UNIFIED_ACTION_STYLE =
-      "border:1px solid rgba(79,70,229,0.55);background:#eef2ff;color:#312e81;font-weight:500;box-shadow:none;";
+      "background:linear-gradient(180deg,#f8fbff 0%,#eef4ff 100%);" +
+      "color:#1d4ed8;font-weight:600;box-shadow:inset 0 1px 0 rgba(255,255,255,0.95);";
 
     const actionBtn = makeBtn(singleLabel, UNIFIED_ACTION_STYLE, async () => {
       document.body.removeChild(overlay);
@@ -1163,7 +1214,7 @@ export class AppUI {
     }, this.permissionDecisionDelayMs);
 
     buttonsCol.append(actionBtn);
-    card.append(title, message, buttonsCol);
+    card.append(iconWrap, title, message, buttonsCol);
     overlay.appendChild(card);
     document.body.appendChild(overlay);
   }
@@ -1179,8 +1230,8 @@ export class AppUI {
 
   // Kiểm tra và cập nhật trạng thái nút Continue
   updateDemoGatingState() {
-    // If the participant already completed the demo, keep Continue unlocked.
-    // This prevents the countdown from restarting when they go back from the Exit screen.
+    // If the participant already completed the demo, keep Continue unlocked
+    // (e.g. after opening feedback and tapping Back).
     if (this.demoCompleted) {
       this.demoContinueEnabled = true;
       this.updateContinueButton(true, null);
@@ -1297,7 +1348,7 @@ export class AppUI {
       tag = document.createElement("div");
       tag.className = "demo-style-tag";
       tag.style.cssText =
-        "position:absolute;top:14px;right:14px;z-index:30;background:rgba(255,255,255,0.92);padding:6px 12px;border-radius:999px;font-size:11px;font-weight:600;border:1px solid rgba(148,163,184,0.6);";
+        "position:absolute;top:14px;right:14px;z-index:30;background:rgba(255,255,255,0.92);padding:6px 12px;border-radius:999px;font-size:13px;font-weight:600;border:1px solid rgba(148,163,184,0.6);";
       tag.style.color = "#22223b";
       tag.style.fontWeight = "500";
       tag.style.boxShadow = "0 2px 10px rgba(0,0,0,0.10)";

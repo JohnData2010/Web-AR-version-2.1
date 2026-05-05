@@ -30,6 +30,11 @@
         --touch-min: 44px;
         --font-main: -apple-system, system-ui, BlinkMacSystemFont, "SF Pro Text",
           "Segoe UI", "Roboto", "Helvetica Neue", Arial, sans-serif;
+        --text-title: clamp(20px, 2.2vw + 0.8rem, 22px);
+        --text-subtitle: clamp(15px, 0.8vw + 0.75rem, 16px);
+        --text-body: clamp(15px, 0.7vw + 0.78rem, 16px);
+        --text-supporting: clamp(13px, 0.45vw + 0.72rem, 14px);
+        --text-caption: clamp(12px, 0.35vw + 0.68rem, 13px);
       }
 
       * {
@@ -61,6 +66,8 @@
         padding: max(12px, var(--safe-top)) max(12px, var(--safe-right))
           max(12px, var(--safe-bottom)) max(12px, var(--safe-left));
         font-family: var(--font-main);
+        font-size: 16px;
+        line-height: 1.5;
         background: radial-gradient(circle at top, #ffffff 0, #e5e7f0 55%, #dde1ee 100%);
         color: var(--fg);
         -webkit-font-smoothing: antialiased;
@@ -172,7 +179,7 @@
         border-radius: 12px;
         border: 1px solid rgba(148, 163, 184, 0.6);
         padding: 12px;
-        line-height: 1.4;
+        line-height: 1.5;
         outline: none;
         -webkit-appearance: none;
         appearance: none;
@@ -230,7 +237,7 @@
       }
 
       .app-meta {
-        font-size: 11px;
+        font-size: var(--text-caption);
         color: #6b7280;
       }
 
@@ -247,7 +254,7 @@
       .screen {
         display: none;
         flex-direction: column;
-        gap: 12px;
+        gap: 14px;
         min-height: 0;
       }
 
@@ -256,18 +263,19 @@
       }
 
       .screen-title {
-        font-size: clamp(17px, 2.8vw + 0.5rem, 19px);
+        font-size: var(--text-title);
         font-weight: 600;
-        letter-spacing: 0.01em;
+        line-height: 1.25;
+        letter-spacing: 0;
         margin-bottom: 2px;
         word-wrap: break-word;
         overflow-wrap: anywhere;
       }
 
       .screen-subtitle {
-        font-size: clamp(13px, 1.2vw + 0.55rem, 14px);
-        color: var(--fg-muted);
-        line-height: 1.5;
+        font-size: var(--text-subtitle);
+        color: #4b5563;
+        line-height: 1.55;
         word-wrap: break-word;
         overflow-wrap: anywhere;
       }
@@ -281,7 +289,8 @@
         border-radius: var(--card-radius);
         border: 1px solid var(--border-subtle);
         background: linear-gradient(145deg, #ffffff 0, #f9fafb 60%, #eef2ff 100%);
-        padding: 14px 14px 12px;
+        /* Symmetric inset so left-aligned prose matches the frame without “slack” skew */
+        padding: clamp(13px, 3.8vw, 16px);
       }
 
       .card-contrast {
@@ -289,21 +298,254 @@
       }
 
       .notice-heading {
-        font-size: 15px;
+        font-size: var(--text-body);
         font-weight: 600;
+        line-height: 1.4;
         margin-bottom: 6px;
       }
 
       .notice-text {
-        font-size: 13px;
-        line-height: 1.5;
+        font-size: var(--text-body);
+        line-height: 1.55;
         color: #111827; /* stronger contrast so long paragraphs stay clearly readable */
+      }
+
+      .notice-text > p:first-of-type {
+        margin-top: 0;
+      }
+
+      .notice-text p {
+        margin: 0 0 10px;
+      }
+
+      .notice-text p:last-child {
+        margin-bottom: 0;
+      }
+
+      .notice-text ul.notice-factors {
+        list-style: disc;
+        padding-left: 1.125rem;
+        margin: 8px 0 0;
+      }
+
+      .notice-text ul.notice-factors > li {
+        margin-bottom: 0;
       }
 
       /* ensure all inline elements inside notice stay fully opaque and same color */
       .notice-text * {
         color: #111827;
         opacity: 1;
+      }
+
+      /*
+       * Focal-policy / permission copy: stay left-aligned (mobile readability).
+       * Use the card width; avoid a artificially narrow centered column inside the tint.
+       */
+      .notice-read-column {
+        box-sizing: border-box;
+        width: 100%;
+        max-width: 100%;
+        margin-inline: 0;
+        text-align: left;
+      }
+
+      /* M2 notice: no blue contrast wrapper — white retention tag is the only frame */
+      .notice-policy-outer-flat {
+        margin: 0;
+        padding: 0;
+        background: transparent;
+        border: none;
+        border-radius: 0;
+        box-shadow: none;
+      }
+
+      .ar-modal-overlay .card.notice-overlay-focal-sheet {
+        background: #ffffff;
+        border-color: rgba(226, 232, 240, 0.95);
+      }
+
+      .notice-policy-block .notice-policy-heading {
+        text-wrap: wrap;
+        font-weight: 600;
+        line-height: 1.42;
+        letter-spacing: -0.012em;
+        margin: 0;
+      }
+
+      .notice-policy-block .notice-policy-body {
+        text-wrap: wrap;
+        font-weight: 600;
+        line-height: 1.55;
+        margin: 8px 0 0;
+      }
+
+      .notice-policy-block .notice-policy-body strong {
+        font-weight: 600;
+      }
+
+      /* Focal pin cards: M2 retention & M1 third-party sharing (same shell; icon markup differs) */
+      .notice-policy-block.notice-retention-highlight,
+      .notice-policy-block.notice-sharing-highlight {
+        margin: 0;
+        padding: clamp(16px, 4vw, 18px);
+        border-radius: 18px;
+        background: #ffffff;
+        border: 1px solid rgba(226, 232, 240, 0.95);
+        box-shadow:
+          0 1px 2px rgba(15, 23, 42, 0.04),
+          0 8px 22px rgba(15, 23, 42, 0.05);
+      }
+
+      .notice-retention-row,
+      .notice-sharing-row {
+        display: flex;
+        align-items: flex-start;
+        gap: 14px;
+      }
+
+      .notice-retention-icon,
+      .notice-sharing-icon {
+        flex-shrink: 0;
+        width: 44px;
+        height: 44px;
+        border-radius: 13px;
+        background: rgba(0, 122, 255, 0.12);
+        color: var(--accent);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      .notice-retention-icon svg,
+      .notice-sharing-icon svg {
+        display: block;
+      }
+
+      .notice-retention-copy,
+      .notice-sharing-copy {
+        flex: 1;
+        min-width: 0;
+      }
+
+      .notice-retention-highlight .notice-policy-body,
+      .notice-sharing-highlight .notice-policy-body {
+        font-weight: 600;
+        color: #4b5563;
+        line-height: 1.55;
+        margin-top: 8px;
+      }
+
+      .notice-retention-highlight .notice-policy-body strong,
+      .notice-sharing-highlight .notice-policy-body strong {
+        font-weight: 600;
+        color: var(--accent);
+      }
+
+      /* Permissions page: use same white shell as focal policy cards */
+      .card.permissions-focal-card {
+        border-radius: 18px;
+        background: #ffffff;
+        border: 1px solid rgba(226, 232, 240, 0.95);
+        box-shadow:
+          0 1px 2px rgba(15, 23, 42, 0.04),
+          0 8px 22px rgba(15, 23, 42, 0.05);
+      }
+
+      /* Permissions card: softer hierarchy than stacking <strong> (semibold → medium → focal span) */
+      .notice-text.permission-panel .permission-panel-lead {
+        text-wrap: wrap; /* not `balance` — avoid premature breaks with slack on line 1 */
+        font-weight: 600;
+        letter-spacing: -0.015em;
+        line-height: 1.42;
+        margin: 0 0 14px;
+      }
+
+      .notice-text.permission-panel .permission-item-list {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+
+      .notice-text.permission-panel .permission-item {
+        display: flex;
+        align-items: flex-start;
+        gap: 12px;
+        padding: 10px 10px;
+        border-radius: 14px;
+        background: #f8fafc;
+        border: 1px solid rgba(203, 213, 225, 0.65);
+      }
+
+      .notice-text.permission-panel .permission-item-icon-wrap {
+        width: 42px;
+        height: 42px;
+        border-radius: 12px;
+        background: rgba(0, 122, 255, 0.12);
+        color: var(--accent);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+      }
+
+      .notice-text.permission-panel .permission-item-icon-wrap svg {
+        width: 21px;
+        height: 21px;
+        stroke: currentColor;
+        stroke-width: 1.9;
+        fill: none;
+      }
+
+      .notice-text.permission-panel .permission-item-copy {
+        min-width: 0;
+        flex: 1;
+      }
+
+      .notice-text.permission-panel .permission-item-title {
+        margin: 0;
+        font-weight: 600;
+        line-height: 1.4;
+        color: #111827;
+      }
+
+      .notice-text.permission-panel .permission-item-access {
+        margin: 4px 0 0;
+        font-weight: 600;
+        color: #4b5563;
+        line-height: 1.55;
+      }
+
+      .notice-text.permission-panel .permission-item:last-child {
+        margin-bottom: 0;
+      }
+
+      .notice-text.permission-panel .permission-panel-subhead {
+        font-weight: 500;
+        color: #4b5563;
+        letter-spacing: -0.005em;
+        line-height: 1.42;
+        margin: 14px 0 6px;
+      }
+
+      .notice-text.permission-panel .permission-panel-detail {
+        font-weight: 400;
+        color: #374151;
+        line-height: 1.55;
+        margin: 0 0 0;
+      }
+
+      .notice-text.permission-panel .permission-panel-detail.permission-panel-follow {
+        margin-top: 8px;
+      }
+
+      .notice-text.permission-panel .permission-panel-value {
+        font-weight: 600;
+        color: var(--accent);
+      }
+
+      .notice-text.permission-panel .permission-panel-follow:last-child {
+        margin-bottom: 0;
       }
 
       .notice-line-label {
@@ -323,7 +565,7 @@
         background: #ffffff;
         padding: 14px 16px;
         border-bottom: 0.5px solid rgba(60, 60, 67, 0.12);
-        line-height: 1.5;
+        line-height: 1.55;
       }
 
       .details-row:last-child {
@@ -331,16 +573,16 @@
       }
 
       .details-row-label {
-        font-size: 13px;
+        font-size: var(--text-body);
         font-weight: 600;
         color: #1d1d1f;
         margin-bottom: 4px;
       }
 
       .details-row-desc {
-        font-size: 13px;
+        font-size: var(--text-body);
         color: #3a3a3c;
-        line-height: 1.45;
+        line-height: 1.55;
       }
 
       .details-row-desc + .details-row-desc {
@@ -353,9 +595,9 @@
 
       /* iOS-style details view: summary, grouped sections, callouts */
       .details-summary {
-        font-size: 13px;
+        font-size: var(--text-body);
         color: var(--fg-muted);
-        line-height: 1.5;
+        line-height: 1.55;
       }
 
       .details-content .details-group {
@@ -375,16 +617,16 @@
       }
 
       .details-title {
-        font-size: 12px;
+        font-size: var(--text-supporting);
         font-weight: 650;
         color: #111827;
         margin-bottom: 6px;
       }
 
       .details-text {
-        font-size: 13px;
+        font-size: var(--text-body);
         color: #111827;
-        line-height: 1.55;
+        line-height: 1.6;
       }
 
       .details-text p {
@@ -397,15 +639,15 @@
       }
 
       .details-footnote {
-        font-size: 11px;
+        font-size: var(--text-caption);
         color: var(--fg-muted);
         margin-top: 6px;
       }
 
       .details-reminder {
-        font-size: 12px;
+        font-size: var(--text-supporting);
         color: var(--fg-muted);
-        line-height: 1.5;
+        line-height: 1.55;
         margin-top: 14px;
         margin-bottom: 0;
       }
@@ -418,16 +660,16 @@
       }
 
       .details-callout-label {
-        font-size: 11px;
+        font-size: var(--text-caption);
         font-weight: 650;
         color: #0f172a;
         margin-bottom: 4px;
       }
 
       .details-callout-text {
-        font-size: 13px;
+        font-size: var(--text-body);
         color: #111827;
-        line-height: 1.5;
+        line-height: 1.55;
       }
 
       .details-explain {
@@ -446,7 +688,7 @@
       }
 
       .pill {
-        font-size: 11px;
+        font-size: var(--text-caption);
         padding: 4px 8px;
         border-radius: 999px;
         border: 1px solid rgba(148, 163, 184, 0.4);
@@ -469,8 +711,9 @@
       .btn {
         border-radius: 999px;
         border: none;
-        padding: 11px 14px;
-        font-size: 14px;
+        min-height: var(--touch-min);
+        padding: 12px 16px;
+        font-size: 15px;
         font-weight: 500;
         cursor: pointer;
         display: inline-flex;
@@ -509,7 +752,7 @@
 
       .btn-small {
         padding: 8px 12px;
-        font-size: 12px;
+        font-size: var(--text-caption);
       }
 
       .btn-disabled,
@@ -520,7 +763,7 @@
       }
 
       .link-inline {
-        font-size: 12px;
+        font-size: var(--text-supporting);
         color: var(--accent);
         text-decoration: underline;
         text-underline-offset: 3px;
@@ -528,7 +771,7 @@
       }
 
       .meta-text {
-        font-size: 11px;
+        font-size: var(--text-caption);
         color: var(--fg-muted);
       }
 
@@ -622,7 +865,7 @@
         color: white;
         padding: 4px 10px;
         border-radius: 12px;
-        font-size: 11px;
+        font-size: var(--text-caption);
         backdrop-filter: blur(4px);
         z-index: 10;
       }
@@ -793,7 +1036,7 @@
         color: white;
         padding: 4px 12px;
         border-radius: 20px;
-        font-size: 12px;
+        font-size: var(--text-caption);
         backdrop-filter: blur(4px);
         display: none;
       }
@@ -846,7 +1089,7 @@
       }
 
       .chip {
-        font-size: 11px;
+        font-size: var(--text-caption);
         padding: 4px 8px;
         border-radius: 999px;
         border: 1px solid rgba(148, 163, 184, 0.6);
@@ -881,7 +1124,7 @@
       }
 
       .demo-cta-text {
-        font-size: 12px;
+        font-size: var(--text-supporting);
         color: var(--fg-muted);
         margin-top: 2px;
       }
@@ -939,28 +1182,28 @@
       }
 
       .demo-camera-alert__title {
-        font-size: 0.9375rem;
+        font-size: var(--text-body);
         font-weight: 700;
         letter-spacing: -0.015em;
-        line-height: 1.25;
+        line-height: 1.35;
         margin: 0 0 6px;
       }
 
       .demo-camera-alert__text {
-        font-size: 0.8125rem;
-        line-height: 1.45;
+        font-size: var(--text-supporting);
+        line-height: 1.5;
         margin: 0;
         font-weight: 500;
       }
 
       .demo-hint {
-        font-size: 11px;
+        font-size: var(--text-caption);
         color: #a16207;
         margin-top: 0;
       }
 
       .badge-link {
-        font-size: 11px;
+        font-size: var(--text-caption);
         color: #9ca3af;
         text-decoration: underline;
         text-underline-offset: 3px;

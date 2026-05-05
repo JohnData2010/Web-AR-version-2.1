@@ -18,9 +18,12 @@
           max(12px, env(safe-area-inset-left, 0px));
         background: #020617;
         color: #e5e7eb;
+        font-size: 16px;
+        line-height: 1.5;
       }
       h1 {
-        font-size: 18px;
+        font-size: clamp(20px, 2.2vw + 0.8rem, 22px);
+        line-height: 1.25;
         margin-bottom: 4px;
       }
       .log {
@@ -29,7 +32,8 @@
         border-radius: 8px;
         background: #0b1120;
         border: 1px solid #1f2937;
-        font-size: 11px;
+        font-size: 13px;
+        line-height: 1.5;
         max-height: 320px;
         overflow: auto;
         white-space: pre-wrap;
@@ -45,14 +49,14 @@
         overflow: hidden;
       }
       label {
-        font-size: 13px;
+        font-size: 15px;
         display: block;
         margin-bottom: 6px;
       }
       select,
       input {
-        font-size: 13px;
-        padding: 4px 6px;
+        font-size: 16px;
+        padding: 7px 8px;
         border-radius: 4px;
         border: 1px solid #4b5563;
         background: #020617;
@@ -64,8 +68,9 @@
       }
       button {
         margin-left: 6px;
-        padding: 5px 10px;
-        font-size: 13px;
+        min-height: 44px;
+        padding: 8px 12px;
+        font-size: 15px;
         border-radius: 4px;
         border: 1px solid #4f46e5;
         background: #4f46e5;
@@ -76,7 +81,7 @@
         transform: translateY(1px);
       }
       .meta {
-        font-size: 12px;
+        font-size: 14px;
         color: #9ca3af;
         margin-bottom: 8px;
       }
@@ -86,8 +91,8 @@
         border-radius: 8px;
         background: #0f172a;
         border: 1px solid #334155;
-        font-size: 11px;
-        line-height: 1.45;
+        font-size: 13px;
+        line-height: 1.5;
         max-width: 560px;
         white-space: pre-wrap;
         color: #cbd5e1;
@@ -101,11 +106,11 @@
       }
       .expect-panel code {
         color: #a5b4fc;
-        font-size: 11px;
+        font-size: 13px;
       }
       #iframeUrlPreview {
         margin-top: 8px;
-        font-size: 11px;
+        font-size: 13px;
         color: #94a3b8;
         word-break: break-all;
       }
@@ -118,8 +123,8 @@
         border-radius: 8px;
         background: #0f172a;
         border: 1px solid #334155;
-        font-size: 11px;
-        line-height: 1.45;
+        font-size: 13px;
+        line-height: 1.5;
         max-width: 560px;
         color: #cbd5e1;
       }
@@ -132,7 +137,7 @@
       details.checklist-reminder {
         margin-top: 10px;
         max-width: 560px;
-        font-size: 11px;
+        font-size: 13px;
         color: #9ca3af;
       }
       details.checklist-reminder summary {

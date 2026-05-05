@@ -13,19 +13,19 @@ export const SCREEN_ORDER_VERSION = "intro_notice_permission_demo_exit";
 /** Option B — single focal section per respondent. */
 export const POLICY_MODE = "focal";
 
-/** Wording unchanged from prior prototype. */
+/** Sharing cue text; `**...**` renders blue emphasis in the notice (same pattern as retention). */
 export const THIRD_PARTY_TEXT = {
   internal:
-    "Usage analytics about your face filter interactions are handled only within the app. They are not shared with third-party organisations.",
+    "Usage analytics about your face filter interactions are handled only within the app. They **are not shared** with third-party organisations.",
   external:
-    "Usage analytics about your face filter interactions are shared with third-party analytics and measurement partners.",
+    "Usage analytics about your face filter interactions **are shared** with third-party analytics and measurement partners.",
 };
 
 export const RETENTION_TEXT = {
   immediate:
-    "Any stored data related to this feature is deleted immediately after the demo ends.",
+    "Any stored data related to this feature **is deleted immediately** after the demo ends.",
   stored:
-    "Any stored data related to this feature may be retained for up to three (3) years unless you request deletion.",
+    "Any stored data related to this feature may be retained for **up to three (3) years** unless you request deletion.",
 };
 
 /**
